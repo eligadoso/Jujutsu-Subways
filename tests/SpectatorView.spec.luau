@@ -1,0 +1,10 @@
+local View = require("../src/shared/SpectatorView")
+local snapshot = {targetId = 22, time = 100}
+assert(View.source(true, 22, false, snapshot, 100.1) == "Snapshot", "A streamed-out runner must use server perspective instead of the lobby camera")
+assert(View.source(true, 22, true, snapshot, 100.1) == "Target", "Use the live runner when replicated")
+assert(View.source(true, 22, false, nil, 100.1) == "Waiting", "Keep spectator camera ownership while waiting for the first view")
+assert(View.source(true, 33, false, snapshot, 100.1) == "Waiting", "Do not show the previous runner after changing target")
+assert(View.source(true, 22, false, snapshot, 102) == "Waiting", "Do not follow obsolete snapshots")
+assert(View.source(false, 22, false, snapshot, 100.1) == "Self", "Exit spectator and restore personal controls")
+assert(View.valid({targetId = -2, time = 100}, -2, 100.1), "Studio test player ids must be accepted")
+print("SpectatorView: missing-character fallback, target changes, freshness, exit and Studio ids passed")

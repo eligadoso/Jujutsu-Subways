@@ -1,0 +1,82 @@
+-- Lane indices are centered on zero: -2, -1, 0, 1, 2.
+local Config = {}
+Config.Track = {LaneCount = 5, LaneWidth = 6, ChunkLength = 100}
+Config.Crouch = {HeightReduction = 0.9, FastFallSpeed = 65}
+Config.Speed = {Base = 26, PerCoin = 0.5, Max = 60}
+Config.Obstacles = {
+	Enabled = true,
+	Seed = 473,
+	FirstChunk = 1,
+	RowEveryChunks = 1,
+	SpawnChance = 0.99,
+	PositionJitter = 20,
+	ExtraTruckChance = 0.65,
+	TruckSignChance = 0.9,
+	WideSignChance = 0.5,
+	SignJumpChance = 0.55,
+	SignJumpOffset = 20,
+	RampBarrierChance = 0.85,
+	MaxTruckWidth = 3,
+	TruckHeight = 16,
+	TruckLength = 28,
+	RampLength = 28,
+	BarrierHeight = 2.2,
+	SignBottom = 3,
+	SignTop = 6.5,
+}
+Config.Crash = {BacktrackDistance = 55, PauseDuration = 0.5, ProtectionDuration = 1.25}
+Config.Trains = {
+	Enabled = true, Speed = 38, Length = 52, Height = 11,
+	SpawnDistance = 260, MinSpawnDistance = 220, MaxSpawnDistance = 340,
+	MinInterval = 7, MaxInterval = 12,
+	MaxActive = 3, DespawnDistance = 100,
+}
+-- A lane change starts at 0.2 s and reaches 0.6 s after 80 pickups.
+Config.LaneChange = {BaseDuration = 0.2, SecondsPerCoin = 0.005, MaxDuration = 0.6}
+Config.DefaultMode = "Classic"
+Config.Developers = {
+	UserIds = {}, -- Add published-game developer UserIds here; the user-owned experience creator also has access.
+	AllowStudio = true, -- Studio test sessions only; this does not grant access in a published server.
+}
+Config.Matches = {
+	Intermission = 10,
+	DefaultMode = "Race",
+	Modes = {
+		Race = {DisplayName = "Carrera", Duration = 180, Distance = 3600, CoinMode = "Classic"},
+	},
+}
+Config.CoinModes = {
+	Classic = {
+		Enabled = true,
+		Seed = 8127,
+		SpawnChance = 0.85,
+		LinesPerChunk = 2,
+		CoinsPerLine = 6,
+		MinCoinsPerLine = 3,
+		Spacing = 6,
+		Value = 1,
+		Height = 3,
+		PickupRadius = 2.5,
+		AllowedLanes = {-2, -1, 0, 1, 2},
+	},
+	CoinRush = {
+		Speed = {Base = 26, PerCoin = 0.5, Max = 70},
+		Enabled = true,
+		Seed = 9271,
+		SpawnChance = 1,
+		LinesPerChunk = 5,
+		CoinsPerLine = 10,
+		MinCoinsPerLine = 6,
+		Spacing = 8,
+		Value = 2,
+		Height = 3,
+		PickupRadius = 2.5,
+		AllowedLanes = {-2, -1, 0, 1, 2},
+	},
+	NoCoins = {
+		Enabled = false,
+		Speed = {Base = 26, PerCoin = 0, Max = 26},
+		LaneChange = {BaseDuration = 0.2, SecondsPerCoin = 0, MaxDuration = 0.2},
+	},
+}
+return Config
