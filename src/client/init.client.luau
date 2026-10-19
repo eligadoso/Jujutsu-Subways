@@ -17,6 +17,10 @@ require(script:WaitForChild("InvulnerabilityEffects"))
 require(script:WaitForChild("WindEffects"))
 require(script:WaitForChild("SkateEffects"))
 require(script:WaitForChild("RouteEffects"))
+require(script:WaitForChild("CoinEffects"))
+require(script:WaitForChild("PowerUpHUD"))
+require(script:WaitForChild("PersonalPickups"))
+require(script:WaitForChild("DraftHUD"))
 local Presentation = require(ReplicatedStorage.Shared:WaitForChild("PlayerPresentation"))
 local root, humanoid, controls
 local lastRunning, lastWatching
@@ -61,9 +65,14 @@ local function panel(name, size, position, anchor)
 	frame.BackgroundColor3, frame.BackgroundTransparency = Brand.Panel, 0.06
 	frame.BorderSizePixel = 0
 	frame.Parent = gui
-	round(frame)
-	outline(frame, Brand.Purple)
+	round(frame, 14)
+	local accent = if name == "Wallet" or name == "Notification" then Brand.Gold elseif name == "MatchStatus" or name == "Spectator" then Brand.Cyan else Brand.Purple
+	outline(frame, accent, 2)
 	gradient(frame, Color3.fromRGB(255, 230, 255), Color3.fromRGB(139, 148, 196))
+	local tab = Instance.new("Frame", frame)
+	tab.Name, tab.BorderSizePixel, tab.BackgroundColor3 = "AccentTab", 0, accent
+	tab.Size, tab.Position = UDim2.fromOffset(24, 4), UDim2.fromOffset(16, -2)
+	round(tab, 2)
 	return frame
 end
 local function label(parent, size, position, fontSize, alignment)
@@ -81,10 +90,11 @@ local function button(parent, title, size, position, color)
 	item.Size, item.Position, item.Text = size, position, title
 	item.BackgroundColor3 = color or Brand.Panel
 	item.BorderSizePixel = 0
-	item.TextColor3, item.TextSize, item.Font = Color3.new(1, 1, 1), 14, Enum.Font.GothamBold
+	item.TextColor3, item.TextSize, item.Font = Color3.new(1, 1, 1), 14, Enum.Font.FredokaOne
 	item.Parent = parent
-	round(item, 8)
-	local border = outline(item, Brand.Purple)
+	round(item, 12)
+	local border = outline(item, Color3.fromRGB(119, 93, 164), 2)
+	gradient(item, Color3.new(1, 1, 1), Color3.fromRGB(185, 177, 215))
 	local scale = Instance.new("UIScale", item)
 	local function animate(value, transparency)
 		TweenService:Create(scale, TweenInfo.new(0.12), {Scale = value}):Play()
@@ -96,26 +106,45 @@ local function button(parent, title, size, position, color)
 	item.MouseButton1Up:Connect(function() animate(1, 0.35) end)
 	return item
 end
-local status = panel("MatchStatus", UDim2.new(0.48, 0, 0, 62), UDim2.new(0.5, 0, 0, 12), Vector2.new(0.5, 0))
+local status = panel("MatchStatus", UDim2.new(0.48, 0, 0, 72), UDim2.new(0.5, 0, 0, 12), Vector2.new(0.5, 0))
 local statusSize = Instance.new("UISizeConstraint", status)
-statusSize.MaxSize, statusSize.MinSize = Vector2.new(400, 62), Vector2.new(235, 62)
-local heading = label(status, UDim2.new(1, -24, 0, 24), UDim2.fromOffset(12, 7), 17, Enum.TextXAlignment.Center)
-heading.Font = Enum.Font.GothamBold
+statusSize.MaxSize, statusSize.MinSize = Vector2.new(440, 72), Vector2.new(270, 72)
+local heading = label(status, UDim2.new(1, -112, 0, 28), UDim2.fromOffset(16, 7), 19)
+heading.Font = Enum.Font.FredokaOne
 heading.TextColor3 = Brand.Gold
-local subtitle = label(status, UDim2.new(1, -24, 0, 20), UDim2.fromOffset(12, 33), 12, Enum.TextXAlignment.Center)
+heading.TextScaled, heading.TextWrapped = true, false
+local headingSize = Instance.new("UITextSizeConstraint", heading)
+headingSize.MaxTextSize, headingSize.MinTextSize = 19, 12
+local raceClock = label(status, UDim2.fromOffset(85, 30), UDim2.new(1, -97, 0, 6), 27, Enum.TextXAlignment.Right)
+raceClock.Font, raceClock.TextColor3 = Enum.Font.FredokaOne, Brand.Cyan
+local subtitle = label(status, UDim2.new(1, -32, 0, 20), UDim2.fromOffset(16, 37), 12)
 subtitle.TextColor3 = muted
-local progress = Instance.new("Frame", status)
-progress.Size, progress.Position = UDim2.new(0, 0, 0, 3), UDim2.new(0, 0, 1, -3)
+local progressTrack = Instance.new("Frame", status)
+progressTrack.Name, progressTrack.BorderSizePixel = "RaceTrack", 0
+progressTrack.Size, progressTrack.Position = UDim2.new(1, -32, 0, 5), UDim2.new(0, 16, 1, -10)
+progressTrack.BackgroundColor3 = Color3.fromRGB(64, 51, 84)
+round(progressTrack, 3)
+local progress = Instance.new("Frame", progressTrack)
+progress.Size, progress.Position = UDim2.new(0, 0, 1, 0), UDim2.fromOffset(0, 0)
+round(progress, 3)
 progress.BorderSizePixel, progress.BackgroundColor3 = 0, mint
 gradient(progress, Brand.Purple, Brand.Cyan)
-local wallet = panel("Wallet", UDim2.fromOffset(158, 56), UDim2.new(0, 16, 1, -16), Vector2.new(0, 1))
-local coinIcon = label(wallet, UDim2.fromOffset(30, 38), UDim2.fromOffset(10, 9), 27)
-coinIcon.Text, coinIcon.TextColor3 = "◆", Brand.Gold
-local walletTitle = label(wallet, UDim2.fromOffset(105, 16), UDim2.fromOffset(43, 6), 10)
-walletTitle.Text, walletTitle.TextColor3 = "MONEDAS", muted
-local coinCount = label(wallet, UDim2.fromOffset(105, 27), UDim2.fromOffset(43, 23), 23)
-coinCount.Font = Enum.Font.GothamBold
+local wallet = panel("Wallet", UDim2.fromOffset(166, 68), UDim2.new(0, 16, 1, -16), Vector2.new(0, 1))
+wallet.BackgroundColor3 = Color3.fromRGB(53, 33, 49)
+local coinMedal = Instance.new("Frame", wallet)
+coinMedal.Size, coinMedal.Position, coinMedal.BackgroundColor3 = UDim2.fromOffset(42, 42), UDim2.fromOffset(10, 13), Brand.Gold
+coinMedal.BorderSizePixel, coinMedal.Rotation = 0, -12
+round(coinMedal, 21)
+outline(coinMedal, Color3.fromRGB(138, 78, 25), 3)
+local coinIcon = label(coinMedal, UDim2.fromScale(1, 1), UDim2.fromScale(0, 0), 26, Enum.TextXAlignment.Center)
+coinIcon.Text, coinIcon.TextColor3 = "◆", Color3.fromRGB(255, 249, 197)
+coinIcon.TextStrokeColor3, coinIcon.TextStrokeTransparency = Color3.fromRGB(165, 100, 22), 0.2
+local walletTitle = label(wallet, UDim2.fromOffset(98, 16), UDim2.fromOffset(62, 9), 10)
+walletTitle.Text, walletTitle.TextColor3 = "MONEDAS", Brand.Gold
+local coinCount = label(wallet, UDim2.fromOffset(98, 32), UDim2.fromOffset(62, 26), 30)
+coinCount.Font = Enum.Font.FredokaOne
 local coinScale = Instance.new("UIScale", coinCount)
+local walletScale = Instance.new("UIScale", wallet)
 local lastCoins = player:GetAttribute("Coins") or 0
 player:GetAttributeChangedSignal("Coins"):Connect(function()
 	local coins = player:GetAttribute("Coins") or 0
@@ -127,13 +156,19 @@ player:GetAttributeChangedSignal("Coins"):Connect(function()
 	lastCoins = coins
 end)
 local options = panel("Options", UDim2.fromOffset(184, 145), UDim2.new(1, -16, 1, -16), Vector2.new(1, 1))
+local optionsScale = Instance.new("UIScale", options)
 options.BackgroundTransparency = 1
 options:FindFirstChildOfClass("UIStroke").Enabled = false
+options:FindFirstChild("AccentTab").Visible = false
 local afk = button(options, "AFK", UDim2.fromOffset(184, 40), UDim2.fromOffset(0, 0))
 local solo = button(options, "▶  JUGAR SOLO", UDim2.fromOffset(184, 40), UDim2.fromOffset(0, 48), Brand.Gold)
 solo.TextColor3 = Brand.Ink
+solo:FindFirstChildOfClass("UIStroke").Color = Color3.fromRGB(255, 238, 146)
+solo.TextSize = 18
+solo.Rotation = -2
 local spectate = button(options, "ESPECTAR", UDim2.fromOffset(184, 40), UDim2.fromOffset(0, 96))
 local endSolo = button(options, "TERMINAR", UDim2.fromOffset(184, 40), UDim2.fromOffset(0, 96), Color3.fromRGB(158, 66, 60))
+afk.TextSize, spectate.TextSize, endSolo.TextSize = 13, 15, 15
 afk.Activated:Connect(function() sessionAction:FireServer("ToggleAFK") end)
 solo.Activated:Connect(function() sessionAction:FireServer("StartSolo") end)
 spectate.Activated:Connect(function()
@@ -149,7 +184,7 @@ local nextButton = button(spectator, ">", UDim2.fromOffset(40, 27), UDim2.fromOf
 prev.Activated:Connect(function() sessionAction:FireServer("SpectatePrevious") end)
 nextButton.Activated:Connect(function() sessionAction:FireServer("SpectateNext") end)
 stop.Activated:Connect(function() sessionAction:FireServer("StopSpectate") end)
-local toast = panel("Notification", UDim2.new(0.45, 0, 0, 38), UDim2.new(0.5, 0, 0, 84), Vector2.new(0.5, 0))
+local toast = panel("Notification", UDim2.new(0.45, 0, 0, 38), UDim2.new(0.5, 0, 0, 96), Vector2.new(0.5, 0))
 Instance.new("UISizeConstraint", toast).MaxSize = Vector2.new(420, 38)
 local toastText = label(toast, UDim2.new(1, -16, 1, -6), UDim2.fromOffset(8, 3), 13, Enum.TextXAlignment.Center)
 local protection = Instance.new("Frame", toast)
@@ -161,6 +196,7 @@ end)
 
 local board = panel("PlayerBoard", UDim2.fromOffset(280, 340), UDim2.new(1, -16, 0, 86), Vector2.new(1, 0))
 local boardToggle = button(board, "JUGADORES  [TAB]", UDim2.new(1, 0, 0, 32), UDim2.fromOffset(0, 0), Brand.Panel)
+boardToggle.TextColor3 = Brand.Cyan
 local list = Instance.new("ScrollingFrame", board)
 list.Size, list.Position = UDim2.new(1, -8, 1, -40), UDim2.fromOffset(4, 36)
 list.BackgroundTransparency, list.BorderSizePixel = 1, 0
@@ -220,6 +256,7 @@ rosterUpdate.OnClientEvent:Connect(function(records)
 		else idleCount += 1; row.item.LayoutOrder = 10000 + idleCount end
 		row.item.BackgroundColor3 = if record.id == player.UserId then Color3.fromRGB(65, 36, 98) else Brand.Panel
 		row.name.Text = (if record.state == "Race" then tostring(record.place) .. ". " else "") .. record.name
+		row.name.TextColor3 = if record.state == "Race" and record.place == 1 then Brand.Gold elseif record.id == player.UserId then Brand.Cyan else Color3.fromRGB(248, 244, 255)
 		row.detail.Text = if record.state == "Race" then "Carrera" elseif record.state == "Solo" then "Solo" elseif record.state == "Finished" then "En meta" elseif record.afk then "AFK" else "Lobby"
 		row.studs.Text, row.coins.Text = tostring(math.floor(record.studs)), tostring(record.coins)
 	end
@@ -316,6 +353,11 @@ RunService:BindToRenderStep("RunnerHUDRender", Enum.RenderPriority.Camera.Value 
 	local travelled = player:GetAttribute("RunDistance") or 0
 	local stillRunning = workspace:GetAttribute("MatchRemaining") or 0
 	local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize
+	local compactHUD = viewport and viewport.X < 600
+	status.Size = UDim2.new(if compactHUD then 0.88 else 0.48, 0, 0, 72)
+	board.Position = UDim2.new(1, -16, 0, if compactHUD then 194 else 96)
+	local smallScale = if viewport and viewport.X < 400 then 0.88 else 1
+	walletScale.Scale, optionsScale.Scale = smallScale, smallScale
 	spectator.Position = UDim2.new(0.5, 0, 1, if viewport and viewport.X < 760 then -178 else -24)
 	coinCount.Text = tostring(player:GetAttribute("Coins") or 0)
 	afk.Visible, solo.Visible = not active, not active
@@ -325,19 +367,22 @@ RunService:BindToRenderStep("RunnerHUDRender", Enum.RenderPriority.Camera.Value 
 	spectate.Text = if watch then "DEJAR DE ESPECTAR" else "ESPECTAR"
 	spectator.Visible = watch
 	progress.Visible = state == "Race"
-	progress.Size = UDim2.new(math.clamp(travelled / distance, 0, 1), 0, 0, 3)
+	progressTrack.Visible = state == "Race"
+	raceClock.Visible = state ~= "Solo"
+	raceClock.Text = clock(remaining)
+	progress.Size = UDim2.new(math.clamp(travelled / distance, 0, 1), 0, 1, 0)
 	if state == "Race" then
-		heading.Text = "CARRERA  " .. clock(remaining)
+		heading.Text = "CARRERA"
 		subtitle.Text = string.format("Puesto %d/%d   |   %d / %d studs", player:GetAttribute("RacePlace") or 0, player:GetAttribute("RacePlayers") or 1, travelled, distance)
 	elseif state == "Solo" then
-		heading.Text, subtitle.Text = "PRACTICA LIBRE", tostring(travelled) .. " studs"
+		heading.Text, subtitle.Text = "PRACTICA", tostring(travelled) .. " studs"
 	elseif state == "Finished" and phase == "Race" then
-		heading.Text = "META  |  " .. clock(remaining)
+		heading.Text = "¡EN META!"
 		subtitle.Text = string.format("Puesto %d  |  Quedan %d corredores", player:GetAttribute("RacePlace") or 0, stillRunning)
 	elseif phase == "Race" then
-		heading.Text, subtitle.Text = "CARRERA EN CURSO  " .. clock(remaining), tostring(stillRunning) .. " corredores siguen en pista"
+		heading.Text, subtitle.Text = "EN PISTA", tostring(stillRunning) .. " corredores siguen en pista"
 	else
-		heading.Text = "PROXIMA CARRERA  " .. clock(remaining)
+		heading.Text = "SIGUIENTE CARRERA"
 		subtitle.Text = string.format("%d disponibles  |  %d studs", workspace:GetAttribute("AvailablePlayers") or 0, distance)
 	end
 	local recovering = active and now < (player:GetAttribute("RecoveringUntil") or 0)

@@ -12,6 +12,20 @@ function Style.detail(parent, name, size, frame, color, material)
 	return p
 end
 
+function Style.bubble(parent, name, size, frame, color)
+	local p = Style.detail(parent, name, size, frame, color, Enum.Material.SmoothPlastic)
+	p.Shape = Enum.PartType.Ball
+	return p
+end
+
+function Style.streetTree(parent, position, variant)
+	Style.detail(parent, "Planter", Vector3.new(3.8, 1, 3.8), CFrame.new(position + Vector3.new(0, 0.75, 0)), Color3.fromRGB(104, 93, 155), Enum.Material.SmoothPlastic)
+	Style.detail(parent, "TreeTrunk", Vector3.new(0.65, 4.5, 0.65), CFrame.new(position + Vector3.new(0, 3, 0)), Color3.fromRGB(145, 103, 83), Enum.Material.Wood)
+	local color = if variant % 3 == 0 then Color3.fromRGB(239, 151, 204) else Color3.fromRGB(91, 192, 155)
+	Style.bubble(parent, "TreeCrown", Vector3.new(4.7, 4, 4.7), CFrame.new(position + Vector3.new(0, 6.3, 0)), color)
+	Style.bubble(parent, "TreeCrownTip", Vector3.new(3.3, 3, 3.2), CFrame.new(position + Vector3.new(0.4, 8.1, 0.2)), color:Lerp(Color3.new(1, 1, 1), 0.12))
+end
+
 function Style.label(part, text, color)
 	local gui = Instance.new("SurfaceGui")
 	gui.Name, gui.Face = "Marking", Enum.NormalId.Back

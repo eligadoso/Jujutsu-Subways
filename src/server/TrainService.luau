@@ -30,7 +30,9 @@ function Module.new(context)
 		end
 		local half = settings.Length / 2
 		local centerY = (settings.Height + 1.2) / 2
-		local body = part("TrainBody", Vector3.new(5.3, settings.Height - 1.2, settings.Length), Vector3.new(0, centerY, 0), Color3.fromRGB(218, 225, 232), Enum.Material.Metal)
+		local paints = {Color3.fromRGB(239, 225, 255), Color3.fromRGB(214, 244, 250), Color3.fromRGB(255, 235, 195)}
+		local paint = paints[random:NextInteger(1, #paints)]
+		local body = part("TrainBody", Vector3.new(5.3, settings.Height - 1.2, settings.Length), Vector3.new(0, centerY, 0), paint, Enum.Material.SmoothPlastic)
 		model.PrimaryPart = body
 		local function detail(name, size, position, color, material)
 			return Style.detail(model, name, size, CFrame.new(position), color, material)
@@ -40,6 +42,16 @@ function Module.new(context)
 		Style.label(destination, "01  CENTRAL", Color3.fromRGB(137, 255, 219))
 		detail("FrontBumper", Vector3.new(4.8, 0.45, 0.12), Vector3.new(0, 1.7, half + 2.05), Color3.fromRGB(44, 53, 66))
 		local nose = part("TrainNose", Vector3.new(5.3, 5, 2), Vector3.new(0, 3.7, half + 1), Color3.fromRGB(39, 98, 179), Enum.Material.Metal)
+		nose.Shape, nose.Material = Enum.PartType.Ball, Enum.Material.SmoothPlastic
+		for _, side in {-1, 1} do
+			Style.bubble(model, "NoseCheek", Vector3.new(0.55, 0.25, 0.08), CFrame.new(side * 1.6, 4.6, half + 1.82), Color3.fromRGB(255, 151, 178))
+			local hood = detail("WindowBrow", Vector3.new(1.9, 0.16, 0.14), Vector3.new(side * 1.12, 8.15, half + 0.2), Color3.fromRGB(96, 61, 155))
+			hood.CFrame *= CFrame.Angles(0, 0, side * math.rad(6))
+			for starZ = -half + 7, half - 7, 16 do
+				local badge = detail("SideDiamond", Vector3.new(0.08, 1, 1), Vector3.new(side * 2.74, 4.8, starZ), Color3.fromRGB(255, 200, 60), Enum.Material.SmoothPlastic)
+				badge.CFrame *= CFrame.Angles(math.pi / 4, 0, 0)
+			end
+		end
 		detail("LowerChassis", Vector3.new(4.5, 0.65, settings.Length - 1), Vector3.new(0, 1.2, 0), Color3.fromRGB(36, 34, 49))
 		for vent = -5, 5, 1.25 do
 			detail("VentSlat", Vector3.new(3.4, 0.03, 0.15), Vector3.new(0, settings.Height + 0.22, -4 + vent), Color3.fromRGB(35, 38, 52))

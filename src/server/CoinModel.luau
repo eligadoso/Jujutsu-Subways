@@ -3,6 +3,7 @@ local CoinModel = {}
 function CoinModel.create(position, value, parent)
 	local model = Instance.new("Model")
 	model.Name = "Coin"
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model:SetAttribute("Value", value)
 	local frame = CFrame.new(position) * CFrame.Angles(0, math.pi / 2, 0)
 	local function piece(name, size, offset, color, cylinder)
@@ -25,6 +26,7 @@ function CoinModel.create(position, value, parent)
 		piece("RaisedEmblem", Vector3.new(0.045, 0.57, 0.57), CFrame.new(side * 0.18, 0, 0) * CFrame.Angles(math.pi / 4, 0, 0), Color3.fromRGB(255, 231, 129), false)
 	end
 	model.Parent = parent
+	game:GetService("CollectionService"):AddTag(model, "SpinningCoin")
 	return model, core
 end
 

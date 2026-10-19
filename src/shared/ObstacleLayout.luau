@@ -154,7 +154,7 @@ end
 
 function Layout.hit(box, from, to, avatarHeight, radius)
 	local enter, leave = 0, 1
-	local function axis(a, b, low, high)
+	local function axis(a: number, b: number, low: number, high: number)
 		local delta = b - a
 		if math.abs(delta) < 0.000001 then return a >= low and a <= high end
 		local t1, t2 = (low - a) / delta, (high - a) / delta

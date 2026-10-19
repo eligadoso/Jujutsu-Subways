@@ -1,0 +1,10 @@
+{
+  "languageMode": "nonstrict",
+  "globals": [
+    "game", "workspace", "script", "Instance", "Enum", "task", "warn",
+    "Vector2", "Vector3", "CFrame", "Color3", "UDim", "UDim2",
+    "TweenInfo", "BrickColor", "Random", "RaycastParams", "OverlapParams",
+    "NumberSequence", "NumberSequenceKeypoint", "NumberRange",
+    "ColorSequence", "ColorSequenceKeypoint"
+  ]
+}

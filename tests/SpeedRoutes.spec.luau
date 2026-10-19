@@ -2,63 +2,77 @@ local Routes = require("../src/shared/SpeedRoutes")
 local Config = require("../src/shared/GameConfig")
 local Motion = require("../src/shared/RunnerMotion")
 local settings, track = Config.SpeedRoutes, Config.Track
-local lanes = {}
-local variants = {}
-for index = -2, 600 do
-	local route = Routes.generate(index, track, settings, 473)
-	if route then
-		lanes[route.lane] = true
-		assert(route.lane >= -2 and route.lane <= 2)
-		variants[route.variant] = true
-		assert(route.variant >= 1 and route.variant <= 3)
-		assert(route.obstacles[1].firstLane == route.lane and route.obstacles[2].width == 1, "Other lanes must remain available")
-		assert(route.entryZ > route.obstacles[1].z and route.obstacles[1].z > route.obstacles[2].z and route.obstacles[2].z > route.padZ)
-		assert(Routes.generate(index, track, settings, 473).lane == route.lane)
-	else assert(index < settings.FirstChunk or (index - settings.FirstChunk) % settings.EveryChunks ~= 0) end
+local lengths, rewards, shapes, stepCounts = {}, {}, {}, {}
+local total, pairs, turns = 0, 0, 0
+local function point(lane, z, y) return {X = lane * track.LaneWidth, Y = y or 4, Z = z} end
+for seed = 1, 40 do
+    for index = 1, 150 do
+        local routes = Routes.generateSet(index, track, settings, seed * 7919)
+        local repeatRoutes = Routes.generateSet(index, track, settings, seed * 7919)
+        assert(#routes == #repeatRoutes, "Generation must be independent of chunk creation order")
+        if #routes == 2 then
+            pairs += 1
+            assert(routes[1].maxLane < routes[2].minLane, "Contested routes must not cross")
+            assert(routes[1].contest == routes[2].contest)
+        end
+        for r, route in routes do
+            total += 1
+            assert(route.length == repeatRoutes[r].length and route.lane == repeatRoutes[r].lane)
+            lengths[route.length], rewards[route.bonus], stepCounts[route.steps] = true, true, true
+            assert(route.steps >= 2 and route.steps <= 4 and #route.gates == route.steps)
+            assert(route.bonus >= 14 and route.bonus <= settings.MaxBonus)
+            assert(route.duration > settings.Duration and route.duration <= settings.MaxDuration)
+            assert(route.minLane >= -2 and route.maxLane <= 2)
+            assert(route.minLane > -2 or route.maxLane < 2, "A bypass lane must remain available")
+            local previous = {lane = route.lane, z = route.entryZ}
+            local signature = ""
+            for _, gate in route.gates do
+                assert(previous.z - gate.z >= settings.MinSpacing)
+                assert(math.abs(previous.lane - gate.lane) <= 1, "Bends must be adjacent lane changes")
+                assert(gate.lane >= route.minLane and gate.lane <= route.maxLane)
+                if gate.lane ~= previous.lane then turns += 1 end
+                previous = gate
+            end
+            for _, obstacle in route.obstacles do
+                assert(obstacle.width == 1 and obstacle.z < route.entryZ and obstacle.z > route.padZ)
+                signature ..= obstacle.kind .. obstacle.firstLane .. ":"
+            end
+            shapes[signature] = true
+            local finalChunk = math.floor((-route.padZ + 50) / 100)
+            for chunk = index, finalChunk do assert(Routes.reserved(chunk, track, settings, seed * 7919)) end
+            local id = total
+            local _, started = Routes.collect(route, point(route.lane, route.entryZ + 1), point(route.lane, route.entryZ - 1), 6, id)
+            assert(started == "Active")
+            for _, gate in route.gates do
+                local won, state = Routes.collect(route, point(gate.lane, gate.z + 1), point(gate.lane, gate.z - 1), 6, id)
+                assert(not won and state == "Active")
+            end
+            local won, state = Routes.collect(route, point(route.exitLane, route.padZ + 1), point(route.exitLane, route.padZ - 1, 9), 6, id)
+            assert(won and state == "Complete")
+            assert(not Routes.collect(route, point(route.exitLane, route.padZ + 1), point(route.exitLane, route.padZ - 1), 6, id))
+            assert(not Routes.collect(route, point(route.exitLane, route.padZ + 1), point(route.exitLane, route.padZ - 1), 6, -id), "Exit alone must not reward shortcuts")
+        end
+        if #routes == 2 then
+            local first = Routes.reward(routes[1], 1)
+            local second = Routes.reward(routes[2], 2)
+            assert(first.bonus == routes[1].bonus + 2 and second.bonus == routes[2].bonus)
+        end
+    end
 end
-local count = 0
-for _ in lanes do count += 1 end
-assert(count == 5, "Risk routes must vary across lanes")
-assert(variants[1] and variants[2] and variants[3], "All three challenge patterns must appear")
-local route = Routes.generate(3, track, settings, 473)
-local function point(z, lane, height) return {X = (lane or route.lane) * track.LaneWidth, Y = height or 4, Z = z} end
-assert(not Routes.collect(route, point(route.padZ + 2), point(route.padZ - 2), 6, 1), "Exit alone must not reward a bypass")
-assert(not Routes.collect(route, point(route.entryZ + 2), point(route.entryZ - 2), 6, 1))
-for _, gate in route.gates do Routes.collect(route, point(gate.z + 2, gate.lane), point(gate.z - 2, gate.lane), 6, 1) end
-assert(Routes.collect(route, point(route.padZ + 2), point(route.padZ - 2, nil, 9), 6, 1), "A successful final jump must receive the boost")
-assert(not Routes.collect(route, point(route.entryZ + 2), point(route.padZ - 2), 6, 1), "A route must reward each runner once")
-Routes.collect(route, point(route.entryZ + 2), point(route.entryZ - 2), 6, 2)
-Routes.collect(route, point(route.entryZ - 2), point(route.entryZ - 4, route.lane + 1), 6, 2)
-assert(not Routes.collect(route, point(route.padZ + 2), point(route.padZ - 2), 6, 2), "Leaving the risk lane must cancel eligibility")
-assert(not Routes.crossed(route, point(route.padZ - 2), point(route.padZ + 2), 6), "Recovery backwards must not activate a pad")
-local _, enteredState = Routes.collect(route, point(route.entryZ + 2), point(route.entryZ - 2), 6, 10)
-assert(enteredState == "Active", "Entry must signal yellow feedback")
-local _, failedState = Routes.collect(route, point(route.entryZ - 2), point(route.entryZ - 4, route.lane + 1), 6, 10)
-assert(failedState == "Failed", "Leaving an active route must signal red feedback")
-local _, idleState = Routes.collect(route, point(route.entryZ - 4, route.lane + 1), point(route.entryZ - 6, route.lane + 1), 6, 10)
-assert(idleState == nil, "Failure feedback must only fire on transitions")
-for row = 0, 8 do
-	local challenge = Routes.generate(settings.FirstChunk + row * settings.EveryChunks, track, settings, 473)
-	local function p(z, lane) return {X = lane * 6, Y = 4, Z = z} end
-	Routes.collect(challenge, p(challenge.entryZ + 1, challenge.lane), p(challenge.entryZ - 1, challenge.lane), 6, 3)
-	assert(not Routes.collect(challenge, p(challenge.padZ + 1, challenge.lane), p(challenge.padZ - 1, challenge.lane), 6, 3), "Skipping checkpoints must not reward a shortcut")
-	Routes.collect(challenge, p(challenge.entryZ + 1, challenge.lane), p(challenge.entryZ - 1, challenge.lane), 6, 4)
-	for _, gate in challenge.gates do
-		assert(not Routes.collect(challenge, p(gate.z + 1, gate.lane), p(gate.z - 1, gate.lane), 6, 4))
-	end
-	local awarded, completeState = Routes.collect(challenge, p(challenge.padZ + 1, challenge.lane), p(challenge.padZ - 1, challenge.lane), 6, 4)
-	assert(awarded and completeState == "Complete", "Each pattern must reward and signal a complete run")
-	if challenge.variant == 3 then
-		assert(challenge.bonus == settings.Bonus + 2 and challenge.duration > settings.Duration)
-		assert(challenge.entryZ - challenge.gates[1].z >= 36, "First lane change must have enough approach space")
-		assert(challenge.gates[2].z - challenge.padZ >= 32, "Return lane change must remain achievable")
-	end
-end
+local function count(items) local n = 0; for _ in items do n += 1 end; return n end
+assert(total > 500 and pairs > 100 and turns > 100)
+assert(count(lengths) > 30 and count(shapes) > 100 and count(rewards) >= 4 and count(stepCounts) == 3, "Generation must provide substantial variation")
+local route
+for index = 3, 10 do route = Routes.generate(index, track, settings, 473); if route then break end end
+Routes.collect(route, point(route.lane, route.entryZ + 1), point(route.lane, route.entryZ - 1), 6, 10000)
+local _, failed = Routes.collect(route, point(route.lane, route.entryZ - 1), point(8, route.entryZ - 2), 6, 10000)
+assert(failed == "Failed")
+assert(not Routes.crossed(route, point(route.exitLane, route.padZ - 1), point(route.exitLane, route.padZ + 1), 6))
 for _, fps in {15, 30, 60, 144} do
-	local speed = 42
-	for _ = 1, fps do speed = Motion.approachSpeed(speed, 80, "Classic", 1 / fps, settings.Bonus) end
-	assert(math.abs(speed - 52) < 0.00001, "Bonus must be capped and independent of frame rate")
-	for _ = 1, fps * 2 do speed = Motion.approachSpeed(speed, 80, "Classic", 1 / fps, 0) end
-	assert(math.abs(speed - 42) < 0.00001, "Boost expiration must ease back to coin speed")
+    local speed = 42
+    for _ = 1, fps * 2 do speed = Motion.approachSpeed(speed, 80, "Classic", 1 / fps, settings.MaxBonus) end
+    assert(math.abs(speed - 64) < 0.00001)
+    for _ = 1, fps * 4 do speed = Motion.approachSpeed(speed, 80, "Classic", 1 / fps, 0) end
+    assert(math.abs(speed - 42) < 0.00001)
 end
-print("SpeedRoutes: optional lanes, risk sequence, completion rewards, replay prevention and smooth boosts passed")
+print("SpeedRoutes: procedural variation, safe spacing, reserved chunks, bends, checkpoints and contested rewards passed")

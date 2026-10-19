@@ -43,10 +43,12 @@ RunService:BindToRenderStep("RunnerSkateEffects", Enum.RenderPriority.Character.
 	local speed = if root then math.max(0, -root.AssemblyLinearVelocity.Z) else 0
 	local protected = (player:GetAttribute("RecoveringUntil") or 0) > workspace:GetServerTimeNow()
 	local enabled = active and root and Config.MotionEffects.Enabled and Config.MotionEffects.Intensity > 0
-		and not protected and humanoid.FloorMaterial ~= Enum.Material.Air and speed > 30
+		and not protected and humanoid.FloorMaterial ~= Enum.Material.Air and speed > 27
+	local boosted = math.max(player:GetAttribute("BoostUntil") or 0, player:GetAttribute("DraftUntil") or 0) > workspace:GetServerTimeNow()
 	for _, trail in trails do
 		trail.Enabled = enabled == true
-		trail.Lifetime = 0.12 + math.clamp((speed - 30) / 30, 0, 1) * 0.12 * math.clamp(Config.MotionEffects.Intensity, 0, 1)
+		trail.Lifetime = 0.12 + math.clamp((speed - 27) / 20, 0, 1) * 0.18 * math.clamp(Config.MotionEffects.Intensity, 0, 1)
+		trail.LightEmission = if boosted then 1 else 0.6
 		if not enabled then trail:Clear() end
 	end
 end)

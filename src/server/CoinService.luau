@@ -3,6 +3,8 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("GameConfig"))
 local Layout = require(Shared:WaitForChild("CoinLayout"))
 local CoinModel = require(script.Parent:WaitForChild("CoinModel"))
+local pickupFeedback = Instance.new("RemoteEvent")
+pickupFeedback.Name, pickupFeedback.Parent = "CoinPickup", ReplicatedStorage
 local Module = {}
 function Module.new(context)
 	local Obstacles = context.Obstacles
@@ -73,6 +75,7 @@ function Module.new(context)
 	-- Server-owned collection uses swept distance to avoid skipping coins at low FPS.
 	function CoinService.collect(player, previous, current)
 		local collected = 0
+		local positions, value = {}, 0
 		local segment = current - previous
 		local lengthSquared = segment:Dot(segment)
 		for _, chunk in chunks do
@@ -84,6 +87,8 @@ function Module.new(context)
 					-- Remove first so a shared coin can only be awarded once.
 					table.remove(chunk.entries, i)
 					entry.model:Destroy()
+					if #positions < 12 then table.insert(positions, position) end
+					value += entry.value
 					local coins = player.leaderstats.Coins
 					coins.Value += entry.value
 					player:SetAttribute("Coins", coins.Value)
@@ -91,6 +96,7 @@ function Module.new(context)
 				end
 			end
 		end
+		if collected > 0 then pickupFeedback:FireClient(player, positions, value) end
 		return collected
 	end
 

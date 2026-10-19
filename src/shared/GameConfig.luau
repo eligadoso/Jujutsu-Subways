@@ -3,7 +3,20 @@ local Config = {}
 Config.Track = {LaneCount = 5, LaneWidth = 6, ChunkLength = 100}
 Config.Crouch = {HeightReduction = 0.9, FastFallSpeed = 65, JumpBuffer = 0.2}
 Config.Speed = {Base = 26, PerCoin = 0.2, Max = 42, Acceleration = 6}
-Config.SpeedRoutes = {Enabled = true, FirstChunk = 3, EveryChunks = 6, Bonus = 10, Duration = 3, Acceleration = 24}
+Config.SpeedRoutes = {
+	Enabled = true, FirstChunk = 3, EveryChunks = 6, Bonus = 10, Duration = 3, Acceleration = 24,
+	MinSteps = 2, MaxSteps = 4, MinSpacing = 76, MaxSpacing = 92, MaxBonus = 22, MaxDuration = 7,
+}
+Config.Drafting = {Enabled = true, MinDistance = 4, MaxDistance = 28, LateralRange = 2.5, ChargeTime = 1.4, Bonus = 6, Duration = 2, Cooldown = 3}
+Config.PowerUps = {
+	Enabled = true, FirstChunk = 2, EveryChunks = 2, PickupRadius = 2.7,
+	-- Temporary catalog: replace these entries when the actual abilities are defined.
+	Catalog = {
+		{Id = "PlaceholderA", Name = "Poder A"},
+		{Id = "PlaceholderB", Name = "Poder B"},
+		{Id = "PlaceholderC", Name = "Poder C"},
+	},
+}
 Config.MotionEffects = {
 	Enabled = true,
 	Intensity = 1, -- Set to 0 for a steady camera; values are capped at 1.

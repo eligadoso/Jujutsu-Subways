@@ -33,36 +33,48 @@ function Module.new(context)
 		local folder = Instance.new("Folder", parent)
 		folder.Name = "Obstacles"
 		local entries = {}
-		local route = if settings.Enabled then SpeedRoutes.generate(index, Config.Track, Config.SpeedRoutes, worldSeed) else nil
-		local generated = if route then route.obstacles else Layout.generate(index, Config.Track, settings)
-		if route then
-			route.visualId = context.Parent.Name .. ":" .. tostring(worldSeed) .. ":" .. index
-			folder:SetAttribute("RouteId", route.visualId)
-			CollectionService:AddTag(folder, "SpeedRouteVisual")
+		local routes = if settings.Enabled then SpeedRoutes.generateSet(index, Config.Track, Config.SpeedRoutes, worldSeed) else {}
+		if context.Distance then
+			for i = #routes, 1, -1 do if routes[i].padZ < 25 - context.Distance + 40 then table.remove(routes, i) end end
+		end
+		local reserved = SpeedRoutes.reserved(index, Config.Track, Config.SpeedRoutes, worldSeed)
+		local generated = if reserved then {} else Layout.generate(index, Config.Track, settings)
+		for routeIndex, route in routes do
+			for _, obstacle in route.obstacles do table.insert(generated, obstacle) end
+			local visual = Instance.new("Folder", folder)
+			visual.Name = "Route_" .. routeIndex
+			route.visualId = context.Parent.Name .. ":" .. tostring(worldSeed) .. ":" .. index .. ":" .. routeIndex
+			visual:SetAttribute("RouteId", route.visualId)
+			CollectionService:AddTag(visual, "SpeedRouteVisual")
 			local x = route.lane * Config.Track.LaneWidth
+			local exitX = route.exitLane * Config.Track.LaneWidth
 			local function decoration(name, size, position, color, material)
-				return Style.detail(folder, name, size, CFrame.new(position + origin), color, material)
+				return Style.detail(visual, name, size, CFrame.new(position + origin), color, material)
 			end
-			decoration("BoostPad", Vector3.new(Config.Track.LaneWidth - 0.6, 0.08, 12), Vector3.new(x, 0.16, route.padZ), Color3.fromRGB(29, 25, 53))
+			decoration("BoostPad", Vector3.new(Config.Track.LaneWidth - 0.6, 0.08, 12), Vector3.new(exitX, 0.16, route.padZ), Color3.fromRGB(29, 25, 53))
 			local points = {{lane = route.lane, z = route.entryZ}}
 			for _, gate in route.gates do table.insert(points, gate) end
-			table.insert(points, {lane = route.lane, z = route.padZ})
+			table.insert(points, {lane = route.exitLane, z = route.padZ})
 			for i = 1, #points - 1 do
 				for _, side in {-1, 1} do
 					local edge = side * (Config.Track.LaneWidth / 2 - 0.3)
 					local a = Vector3.new(points[i].lane * Config.Track.LaneWidth + edge, 0.2, points[i].z) + origin
 					local b = Vector3.new(points[i + 1].lane * Config.Track.LaneWidth + edge, 0.2, points[i + 1].z) + origin
-					local line = Style.detail(folder, "RiskLane", Vector3.new(0.12, 0.05, (a - b).Magnitude), CFrame.lookAt((a + b) / 2, b), Color3.fromRGB(169, 65, 255), Enum.Material.Neon)
+					local line = Style.detail(visual, "RiskLane", Vector3.new(0.12, 0.05, (a - b).Magnitude), CFrame.lookAt((a + b) / 2, b), Color3.fromRGB(169, 65, 255), Enum.Material.Neon)
 					line:SetAttribute("RouteSegment", i)
 				end
 			end
 			for step = -3, 3, 3 do
 				for _, side in {-1, 1} do
-					local arrow = decoration("BoostChevron", Vector3.new(0.16, 0.06, 2.3), Vector3.new(x + side * 0.8, 0.23, route.padZ + step), Color3.fromRGB(75, 230, 255), Enum.Material.Neon)
+					local arrow = decoration("BoostChevron", Vector3.new(0.16, 0.06, 2.3), Vector3.new(exitX + side * 0.8, 0.23, route.padZ + step), Color3.fromRGB(75, 230, 255), Enum.Material.Neon)
 					arrow.CFrame *= CFrame.Angles(0, side * math.rad(45), 0)
 				end
 			end
 			decoration("RouteEntry", Vector3.new(Config.Track.LaneWidth - 0.6, 0.06, 0.4), Vector3.new(x, 0.22, route.entryZ), Color3.fromRGB(255, 204, 55), Enum.Material.Neon)
+			do
+				local badge = decoration("RouteReward", Vector3.new(3, 1.1, 0.1), Vector3.new(x, 8.5, route.entryZ), Color3.fromRGB(37, 24, 60))
+				Style.label(badge, "◆ +" .. route.bonus, Color3.fromRGB(255, 211, 60))
+			end
 		end
 		for _, data in generated do
 			local width = data.width * Config.Track.LaneWidth - 0.7
@@ -86,12 +98,19 @@ function Module.new(context)
 				data.height = height
 				local palette = {Color3.fromRGB(219, 84, 57), Color3.fromRGB(55, 111, 183), Color3.fromRGB(231, 170, 47), Color3.fromRGB(118, 77, 169), Color3.fromRGB(46, 151, 137)}
 				local color = palette[data.paint or 1]
+				color = color:Lerp(Color3.fromRGB(255, 218, 245), 0.12)
 				hazard(part(model, "Cargo", Vector3.new(width, height - 0.8, length), Vector3.new(x, (height + 0.8) / 2, z), color, true))
 				-- Flush roofs meet at lane boundaries, so the rider can cross without falling into a gap.
 				part(model, "WalkableRoof", Vector3.new(data.width * Config.Track.LaneWidth, 0.2, length), Vector3.new(x, height, z), Color3.fromRGB(212, 223, 229), true)
 				hazard(part(model, "Cab", Vector3.new(width, 4.5, 5), Vector3.new(x, 2.8, z - length / 2 - 2.5), color, true))
 				part(model, "Windshield", Vector3.new(width - 0.5, 1.5, 0.15), Vector3.new(x, 4, z - length / 2 - 5.1), Color3.fromRGB(67, 133, 170))
 				local rear = z + length / 2 + 0.04
+				Style.bubble(model, "CabVisor", Vector3.new(width + 0.08, 0.4, 5.2), CFrame.new(origin + Vector3.new(x, 5.1, z - length / 2 - 2.5)), color:Lerp(Color3.new(1, 1, 1), 0.25))
+				for _, side in {-1, 1} do
+					local sticker = detail("CargoSticker", Vector3.new(0.08, 2.3, 2.3), Vector3.new(x + side * (width / 2 + 0.07), height * 0.58, z), Color3.fromRGB(255, 221, 85), Enum.Material.SmoothPlastic)
+					sticker.CFrame *= CFrame.Angles(math.pi / 4, 0, 0)
+					Style.bubble(model, "RearReflector", Vector3.new(0.65, 0.65, 0.16), CFrame.new(origin + Vector3.new(x + side * (width / 2 - 0.6), height - 1.2, rear + 0.15)), Color3.fromRGB(129, 234, 247))
+				end
 				detail("Chassis", Vector3.new(width - 0.4, 0.45, length + 3), Vector3.new(x, 0.85, z - 1.5), Color3.fromRGB(39, 38, 51))
 				detail("CabRoof", Vector3.new(width + 0.08, 0.18, 5.15), Vector3.new(x, 5.12, z - length / 2 - 2.5), color:Lerp(Color3.new(1, 1, 1), 0.2))
 				detail("FrontBumper", Vector3.new(width, 0.4, 0.25), Vector3.new(x, 1.15, z - length / 2 - 5.15), Color3.fromRGB(159, 167, 182))
@@ -166,17 +185,16 @@ function Module.new(context)
 			data.box = box
 			table.insert(entries, data)
 		end
-		chunks[index] = {folder = folder, entries = entries, route = route}
+		chunks[index] = {folder = folder, entries = entries, routes = routes}
 	end
 
 	function Service.collectBoost(player, runner)
 		for _, chunk in chunks do
-			local route = chunk.route
-			if route then
+			for _, route in chunk.routes or {} do
 				local from, to = runner.previousPosition - origin, runner.root.Position - origin
 				local complete, state = SpeedRoutes.collect(route, from, to, Config.Track.LaneWidth, player.UserId)
 				if state then routeFeedback:FireClient(player, route.visualId, state, route.entered[player.UserId] or #route.gates + 1) end
-				if complete then return route end
+				if complete then return SpeedRoutes.reward(route, player.UserId) end
 			end
 		end
 		return false
@@ -184,9 +202,9 @@ function Module.new(context)
 
 	function Service.cancelRoute(player, failed)
 		for _, chunk in chunks do
-			if chunk.route then
-				if failed and chunk.route.entered[player.UserId] then routeFeedback:FireClient(player, chunk.route.visualId, "Failed", 0) end
-				chunk.route.entered[player.UserId] = nil
+			for _, route in chunk.routes or {} do
+				if failed and route.entered[player.UserId] then routeFeedback:FireClient(player, route.visualId, "Failed", 0) end
+				route.entered[player.UserId] = nil
 			end
 		end
 	end
@@ -289,10 +307,12 @@ function Module.new(context)
 	end
 
 	function Service.coinHeight(index, x, z, height)
-		local chunk = chunks[index]
-		if not chunk then return height end
+		local relevant = {}
+		for key, chunk in chunks do
+			if key ~= "Moving" then for _, entry in chunk.entries do table.insert(relevant, entry) end end
+		end
 		local raised = height
-		for _, entry in chunk.entries do
+		for _, entry in relevant do
 			local box = entry.box
 			if x < box.minX - 1 or x > box.maxX + 1 then continue end
 			if entry.kind == "Truck" or entry.kind == "RampTruck" then

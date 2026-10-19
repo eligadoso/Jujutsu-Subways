@@ -3,6 +3,7 @@ local CollectionService = game:GetService("CollectionService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
+local Feedback = require(script.Parent:WaitForChild("PlayerFeedback"))
 local colors = {
 	Idle = Color3.fromRGB(169, 65, 255),
 	Active = Color3.fromRGB(255, 210, 50),
@@ -30,6 +31,8 @@ CollectionService:GetInstanceRemovedSignal("SpeedRouteVisual"):Connect(function(
 	if id then states[id] = nil end
 end)
 ReplicatedStorage:WaitForChild("RouteFeedback").OnClientEvent:Connect(function(id, state, step)
+	local previous = states[id]
+	if state ~= "Active" or (previous and step > previous.step) then Feedback.route(state) end
 	states[id] = {state = state, step = step, deadline = os.clock() + (if state == "Active" then 10 else 1.6)}
 end)
 RunService:BindToRenderStep("RunnerRouteFeedback", Enum.RenderPriority.Last.Value, function(dt)
