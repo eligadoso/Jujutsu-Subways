@@ -2,6 +2,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("GameConfig"))
 local Layout = require(Shared:WaitForChild("CoinLayout"))
+local CoinModel = require(script.Parent:WaitForChild("CoinModel"))
 local Module = {}
 function Module.new(context)
 	local Obstacles = context.Obstacles
@@ -20,18 +21,8 @@ function Module.new(context)
 		for _, data in Layout.generate(index, Config.Track, settings) do
 			local height = Obstacles.coinHeight(index, data.x, data.z, data.y)
 			if not height then continue end
-			local coin = Instance.new("Part")
-			coin.Name = "Coin"
-			coin.Shape = Enum.PartType.Cylinder
-			coin.Size = Vector3.new(0.25, 1.6, 1.6)
-			coin.CFrame = CFrame.new(origin + Vector3.new(data.x, height, data.z)) * CFrame.Angles(0, math.pi / 2, 0)
-			coin.Color = Color3.fromRGB(255, 202, 40)
-			coin.Material = Enum.Material.Neon
-			coin.Anchored = true
-			coin.CanCollide, coin.CanTouch, coin.CanQuery = false, false, false
-			coin:SetAttribute("Value", data.value)
-			coin.Parent = folder
-			table.insert(entries, {part = coin, value = data.value, radius = data.radius})
+			local model, core = CoinModel.create(origin + Vector3.new(data.x, height, data.z), data.value, folder)
+			table.insert(entries, {part = core, model = model, value = data.value, radius = data.radius})
 		end
 		chunks[index] = {parent = parent, folder = folder, entries = entries}
 	end
@@ -92,7 +83,7 @@ function Module.new(context)
 				if (position - (previous + segment * t)).Magnitude <= entry.radius then
 					-- Remove first so a shared coin can only be awarded once.
 					table.remove(chunk.entries, i)
-					entry.part:Destroy()
+					entry.model:Destroy()
 					local coins = player.leaderstats.Coins
 					coins.Value += entry.value
 					player:SetAttribute("Coins", coins.Value)

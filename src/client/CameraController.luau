@@ -4,6 +4,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Rig = require(Shared:WaitForChild("RunnerCamera"))
 local View = require(Shared:WaitForChild("SpectatorView"))
+local MotionEffects = require(script.Parent:WaitForChild("MotionEffects"))
+local effects = MotionEffects.new()
+local baseFrame, lastRoot
 local player = Players.LocalPlayer
 local snapshot, lastSubject, ownedCamera
 local requestedTarget
@@ -43,21 +46,31 @@ RunService:BindToRenderStep("RunnerPerspective", Enum.RenderPriority.Camera.Valu
 			position, originX = snapshot.position + snapshot.velocity * ahead, snapshot.originX
 		end
 		-- Never switch to the lobby avatar while the observed character is streaming in.
-		camera.CameraType, camera.FieldOfView = Enum.CameraType.Scriptable, 75
+		camera.CameraType = Enum.CameraType.Scriptable
 		ownedCamera = true
 		if position then
 			local frame = Rig.frame(position, originX)
-			if lastSubject ~= targetId then camera.CFrame = frame
-			else camera.CFrame = camera.CFrame:Lerp(frame, 1 - math.exp(-10 * dt)) end
+			local currentRoot = if hasRoot then root else nil
+			if lastSubject ~= targetId or lastRoot ~= currentRoot or not baseFrame then
+				baseFrame, effects = frame, MotionEffects.new()
+			else baseFrame = baseFrame:Lerp(frame, 1 - math.exp(-10 * dt)) end
+			local velocity = if hasRoot then root.AssemblyLinearVelocity else snapshot.velocity
+			local grounded = hasRoot and humanoid.FloorMaterial ~= Enum.Material.Air
+			local crouching = hasRoot and character:GetAttribute("Crouching") == true
+			local recovery = subject and subject:GetAttribute("RecoveringUntil") or 0
+			local offset, fov = effects:update(dt, velocity, grounded, crouching, recovery, now, subject and subject:GetAttribute("Coins"))
+			camera.CFrame, camera.FieldOfView = baseFrame * offset, fov
 			camera.Focus = CFrame.new(position)
 			if humanoid then camera.CameraSubject = humanoid end
 			lastSubject = targetId
+			lastRoot = currentRoot
 		end
 	elseif ownedCamera then
 		local ownHumanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 		camera.CameraType, camera.FieldOfView = Enum.CameraType.Custom, 70
 		if ownHumanoid then camera.CameraSubject = ownHumanoid end
 		lastSubject, requestedTarget, ownedCamera = nil, nil, false
+		baseFrame, lastRoot, effects = nil, nil, MotionEffects.new()
 	end
 end)
 return true

@@ -3,6 +3,11 @@ local Config = require(Shared:WaitForChild("GameConfig"))
 local Layout = require(Shared:WaitForChild("ObstacleLayout"))
 local TrainMotion = require(Shared:WaitForChild("TrainMotion"))
 local RampMotion = require(Shared:WaitForChild("RampMotion"))
+local Style = require(script.Parent:WaitForChild("VisualStyle"))
+local SpeedRoutes = require(Shared:WaitForChild("SpeedRoutes"))
+local CollectionService = game:GetService("CollectionService")
+local routeFeedback = Instance.new("RemoteEvent")
+routeFeedback.Name, routeFeedback.Parent = "RouteFeedback", game:GetService("ReplicatedStorage")
 local Module = {}
 function Module.new(context)
 	local origin = context.Origin
@@ -18,7 +23,7 @@ function Module.new(context)
 		p.Anchored = true
 		p.CanCollide = solid or false
 		p.CanTouch = false
-		p.Material = Enum.Material.SmoothPlastic
+		p.Material = Enum.Material.Metal
 		p.TopSurface, p.BottomSurface = Enum.SurfaceType.Smooth, Enum.SurfaceType.Smooth
 		p.Parent = parent
 		return p
@@ -28,12 +33,46 @@ function Module.new(context)
 		local folder = Instance.new("Folder", parent)
 		folder.Name = "Obstacles"
 		local entries = {}
-		for _, data in Layout.generate(index, Config.Track, settings) do
+		local route = if settings.Enabled then SpeedRoutes.generate(index, Config.Track, Config.SpeedRoutes, worldSeed) else nil
+		local generated = if route then route.obstacles else Layout.generate(index, Config.Track, settings)
+		if route then
+			route.visualId = context.Parent.Name .. ":" .. tostring(worldSeed) .. ":" .. index
+			folder:SetAttribute("RouteId", route.visualId)
+			CollectionService:AddTag(folder, "SpeedRouteVisual")
+			local x = route.lane * Config.Track.LaneWidth
+			local function decoration(name, size, position, color, material)
+				return Style.detail(folder, name, size, CFrame.new(position + origin), color, material)
+			end
+			decoration("BoostPad", Vector3.new(Config.Track.LaneWidth - 0.6, 0.08, 12), Vector3.new(x, 0.16, route.padZ), Color3.fromRGB(29, 25, 53))
+			local points = {{lane = route.lane, z = route.entryZ}}
+			for _, gate in route.gates do table.insert(points, gate) end
+			table.insert(points, {lane = route.lane, z = route.padZ})
+			for i = 1, #points - 1 do
+				for _, side in {-1, 1} do
+					local edge = side * (Config.Track.LaneWidth / 2 - 0.3)
+					local a = Vector3.new(points[i].lane * Config.Track.LaneWidth + edge, 0.2, points[i].z) + origin
+					local b = Vector3.new(points[i + 1].lane * Config.Track.LaneWidth + edge, 0.2, points[i + 1].z) + origin
+					local line = Style.detail(folder, "RiskLane", Vector3.new(0.12, 0.05, (a - b).Magnitude), CFrame.lookAt((a + b) / 2, b), Color3.fromRGB(169, 65, 255), Enum.Material.Neon)
+					line:SetAttribute("RouteSegment", i)
+				end
+			end
+			for step = -3, 3, 3 do
+				for _, side in {-1, 1} do
+					local arrow = decoration("BoostChevron", Vector3.new(0.16, 0.06, 2.3), Vector3.new(x + side * 0.8, 0.23, route.padZ + step), Color3.fromRGB(75, 230, 255), Enum.Material.Neon)
+					arrow.CFrame *= CFrame.Angles(0, side * math.rad(45), 0)
+				end
+			end
+			decoration("RouteEntry", Vector3.new(Config.Track.LaneWidth - 0.6, 0.06, 0.4), Vector3.new(x, 0.22, route.entryZ), Color3.fromRGB(255, 204, 55), Enum.Material.Neon)
+		end
+		for _, data in generated do
 			local width = data.width * Config.Track.LaneWidth - 0.7
 			local x = (data.firstLane + (data.width - 1) / 2) * Config.Track.LaneWidth
 			local z = data.z
 			local model = Instance.new("Model", folder)
 			model.Name = data.kind
+			local function detail(name, size, position, color, material)
+				return Style.detail(model, name, size, CFrame.new(position + origin), color, material)
+			end
 			local box = {minX = x - width / 2, maxX = x + width / 2}
 			data.hazards = {}
 			local function hazard(p)
@@ -52,10 +91,36 @@ function Module.new(context)
 				part(model, "WalkableRoof", Vector3.new(data.width * Config.Track.LaneWidth, 0.2, length), Vector3.new(x, height, z), Color3.fromRGB(212, 223, 229), true)
 				hazard(part(model, "Cab", Vector3.new(width, 4.5, 5), Vector3.new(x, 2.8, z - length / 2 - 2.5), color, true))
 				part(model, "Windshield", Vector3.new(width - 0.5, 1.5, 0.15), Vector3.new(x, 4, z - length / 2 - 5.1), Color3.fromRGB(67, 133, 170))
+				local rear = z + length / 2 + 0.04
+				detail("Chassis", Vector3.new(width - 0.4, 0.45, length + 3), Vector3.new(x, 0.85, z - 1.5), Color3.fromRGB(39, 38, 51))
+				detail("CabRoof", Vector3.new(width + 0.08, 0.18, 5.15), Vector3.new(x, 5.12, z - length / 2 - 2.5), color:Lerp(Color3.new(1, 1, 1), 0.2))
+				detail("FrontBumper", Vector3.new(width, 0.4, 0.25), Vector3.new(x, 1.15, z - length / 2 - 5.15), Color3.fromRGB(159, 167, 182))
+				detail("FrontGrille", Vector3.new(width * 0.45, 0.8, 0.08), Vector3.new(x, 2.25, z - length / 2 - 5.12), Color3.fromRGB(28, 28, 41))
+				for bar = 1, 3 do
+					detail("GrilleSlat", Vector3.new(width * 0.42, 0.06, 0.05), Vector3.new(x, 1.9 + bar * 0.19, z - length / 2 - 5.18), Color3.fromRGB(160, 170, 186))
+				end
+				detail("RearDoors", Vector3.new(width - 0.35, height - 2.2, 0.06), Vector3.new(x, height / 2 + 0.5, rear), color:Lerp(Color3.fromRGB(30, 40, 54), 0.25))
+				detail("DoorSeam", Vector3.new(0.1, height - 2.3, 0.08), Vector3.new(x, height / 2 + 0.5, rear + 0.05), Color3.fromRGB(38, 47, 58))
+				detail("RearBumper", Vector3.new(width, 0.35, 0.18), Vector3.new(x, 1.4, rear + 0.06), Color3.fromRGB(187, 200, 206))
+				for _, side in {-1, 1} do
+					detail("CabSideWindow", Vector3.new(0.08, 1.5, 2.8), Vector3.new(x + side * (width / 2 + 0.04), 4, z - length / 2 - 2.8), Color3.fromRGB(36, 65, 89), Enum.Material.Glass)
+					detail("DoorHandle", Vector3.new(0.12, 0.12, 0.5), Vector3.new(x + side * (width / 2 + 0.08), 2.9, z - length / 2 - 1.7), Color3.fromRGB(200, 208, 217))
+					detail("CargoLowerTrim", Vector3.new(0.08, 0.25, length), Vector3.new(x + side * (width / 2 + 0.04), 2.4, z), Color3.fromRGB(221, 204, 153))
+					detail("DoorLock", Vector3.new(0.09, height - 3, 0.12), Vector3.new(x + side * width * 0.23, height / 2 + 0.6, rear + 0.1), Color3.fromRGB(177, 190, 198))
+					detail("TailLight", Vector3.new(0.45, 0.6, 0.12), Vector3.new(x + side * (width / 2 - 0.5), 1.95, rear + 0.12), Color3.fromRGB(255, 78, 67), Enum.Material.Neon)
+					detail("Headlight", Vector3.new(0.6, 0.4, 0.1), Vector3.new(x + side * (width / 2 - 0.65), 2.5, z - length / 2 - 5.15), Color3.fromRGB(255, 231, 176), Enum.Material.Neon)
+					for rib = -length / 2 + 2, length / 2 - 2, 4 do
+						detail("CargoRib", Vector3.new(0.06, height - 1.8, 0.13), Vector3.new(x + side * (width / 2 + 0.02), height / 2 + 0.3, z + rib), color:Lerp(Color3.new(1, 1, 1), 0.22))
+					end
+				end
+				local badge = detail("CargoBadge", Vector3.new(math.min(width - 0.8, 4), 1.5, 0.08), Vector3.new(x, height - 2.5, rear + 0.1), Color3.fromRGB(30, 44, 61))
+				Style.label(badge, if climbable then "CARGA" else "METRO")
 				for _, side in {-1, 1} do
 					for _, offset in {-length / 2 + 4, length / 2 - 4} do
 						local wheel = part(model, "Wheel", Vector3.new(0.5, 1.5, 1.5), Vector3.new(x + side * width / 2, 0.8, z + offset), Color3.fromRGB(24, 29, 36))
 						wheel.Shape = Enum.PartType.Cylinder
+						local hub = detail("WheelHub", Vector3.new(0.08, 0.8, 0.8), Vector3.new(x + side * (width / 2 + 0.28), 0.8, z + offset), Color3.fromRGB(151, 164, 182))
+						hub.Shape = Enum.PartType.Cylinder
 					end
 				end
 				box.minY, box.maxY = 0.8, height
@@ -78,22 +143,52 @@ function Module.new(context)
 					hazard(part(model, "Post", Vector3.new(0.22, settings.SignTop, 0.4), Vector3.new(x + side * width / 2, settings.SignTop / 2, z), Color3.fromRGB(62, 69, 79)))
 				end
 				box.minY, box.maxY = settings.SignBottom, settings.SignTop
+				local panel = detail("ClearanceMarking", Vector3.new(width - 0.45, settings.SignTop - settings.SignBottom - 0.35, 0.05), Vector3.new(x, (settings.SignBottom + settings.SignTop) / 2, z + 0.63), Color3.fromRGB(39, 47, 58))
+				Style.label(panel, "↓  ↓  ↓", Color3.fromRGB(255, 204, 75))
+				for _, side in {-1, 1} do
+					detail("WarningLamp", Vector3.new(0.25, 0.25, 0.1), Vector3.new(x + side * (width / 2 - 0.18), settings.SignTop - 0.2, z + 0.65), Color3.fromRGB(255, 194, 64), Enum.Material.Neon)
+				end
 				box.minZ, box.maxZ = z - 0.6, z + 0.6
 			else
 				-- Logical hit detection allows a clean jump without physical snagging.
-				width = Config.Track.LaneCount * Config.Track.LaneWidth + 4
-				box.minX, box.maxX = -width / 2, width / 2
-				hazard(part(model, "JumpBarrier", Vector3.new(width, settings.BarrierHeight, 0.65), Vector3.new(0, settings.BarrierHeight / 2, z), Color3.fromRGB(241, 105, 52)))
+				if data.kind == "Barrier" then width = Config.Track.LaneCount * Config.Track.LaneWidth + 4 end
+				box.minX, box.maxX = x - width / 2, x + width / 2
+				hazard(part(model, "JumpBarrier", Vector3.new(width, settings.BarrierHeight, 0.65), Vector3.new(x, settings.BarrierHeight / 2, z), Color3.fromRGB(241, 105, 52)))
 				for stripe = -width / 2 + 1, width / 2 - 1, 2 do
-					part(model, "Stripe", Vector3.new(0.7, settings.BarrierHeight, 0.05), Vector3.new(stripe, settings.BarrierHeight / 2, z + 0.35), Color3.fromRGB(255, 238, 151))
+					part(model, "Stripe", Vector3.new(0.7, settings.BarrierHeight, 0.05), Vector3.new(x + stripe, settings.BarrierHeight / 2, z + 0.35), Color3.fromRGB(255, 238, 151))
 				end
 				box.minY, box.maxY = 0, settings.BarrierHeight
+				for _, side in {-1, 1} do
+					detail("BarrierReflector", Vector3.new(0.4, 0.3, 0.08), Vector3.new(x + side * (width / 2 - 0.5), settings.BarrierHeight - 0.25, z + 0.39), Color3.fromRGB(255, 237, 188), Enum.Material.Neon)
+				end
 				box.minZ, box.maxZ = z - 0.325, z + 0.325
 			end
 			data.box = box
 			table.insert(entries, data)
 		end
-		chunks[index] = {folder = folder, entries = entries}
+		chunks[index] = {folder = folder, entries = entries, route = route}
+	end
+
+	function Service.collectBoost(player, runner)
+		for _, chunk in chunks do
+			local route = chunk.route
+			if route then
+				local from, to = runner.previousPosition - origin, runner.root.Position - origin
+				local complete, state = SpeedRoutes.collect(route, from, to, Config.Track.LaneWidth, player.UserId)
+				if state then routeFeedback:FireClient(player, route.visualId, state, route.entered[player.UserId] or #route.gates + 1) end
+				if complete then return route end
+			end
+		end
+		return false
+	end
+
+	function Service.cancelRoute(player, failed)
+		for _, chunk in chunks do
+			if chunk.route then
+				if failed and chunk.route.entered[player.UserId] then routeFeedback:FireClient(player, chunk.route.visualId, "Failed", 0) end
+				chunk.route.entered[player.UserId] = nil
+			end
+		end
 	end
 
 	function Service.removeChunk(index)

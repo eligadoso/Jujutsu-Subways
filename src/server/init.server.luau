@@ -2,7 +2,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local PhysicsService = game:GetService("PhysicsService")
-local Lighting = game:GetService("Lighting")
 local Teams = game:GetService("Teams")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("GameConfig"))
@@ -36,8 +35,7 @@ local sessionAction = remote("SessionAction")
 local rosterUpdate = remote("RosterUpdate")
 local baseplate = workspace:FindFirstChild("Baseplate")
 if baseplate then baseplate:Destroy() end
-Lighting.ClockTime = 16
-Lighting.Ambient = Color3.fromRGB(120, 132, 155)
+require(script:WaitForChild("VisualStyle")).lighting()
 if not PhysicsService:IsCollisionGroupRegistered("Runners") then PhysicsService:RegisterCollisionGroup("Runners") end
 PhysicsService:CollisionGroupSetCollidable("Runners", "Runners", false)
 Lobby.build()

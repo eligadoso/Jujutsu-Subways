@@ -1,11 +1,13 @@
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("GameConfig"))
 local Motion = require(Shared:WaitForChild("RunnerMotion"))
+local CrashMotion = require(Shared:WaitForChild("CrashMotion"))
 local Skateboard = require(script.Parent:WaitForChild("Skateboard"))
 local Crouch = require(script.Parent:WaitForChild("Crouch"))
 local CoinFactory = require(script.Parent:WaitForChild("CoinService"))
 local ObstacleFactory = require(script.Parent:WaitForChild("ObstacleService"))
 local TrainFactory = require(script.Parent:WaitForChild("TrainService"))
+local Style = require(script.Parent:WaitForChild("VisualStyle"))
 local World = {}
 World.__index = World
 
@@ -45,7 +47,10 @@ function World.new(options)
 		model.Name = "Section_" .. index
 		local z = -index * CHUNK_LENGTH
 		local random = Random.new(index + context.Seed)
-		part(model, "TrackBed", Vector3.new(HALF_WIDTH * 2, 2, CHUNK_LENGTH), Vector3.new(0, -1, z), Color3.fromRGB(65, 70, 82), Enum.Material.Asphalt)
+		local function detail(name, size, position, color, material)
+			return Style.detail(model, name, size, CFrame.new(position + origin), color, material)
+		end
+		part(model, "TrackBed", Vector3.new(HALF_WIDTH * 2, 2, CHUNK_LENGTH), Vector3.new(0, -1, z), Color3.fromRGB(48, 56, 66), Enum.Material.Asphalt)
 		for lane = Motion.MinLane, Motion.MaxLane do
 			local x = lane * Motion.LaneWidth
 			for _, offset in {-1.9, 1.9} do
@@ -57,13 +62,21 @@ function World.new(options)
 		end
 		for _, side in {-1, 1} do
 			part(model, "Sidewalk", Vector3.new(5, 1, CHUNK_LENGTH), Vector3.new(side * (HALF_WIDTH + 2.5), 0, z), Color3.fromRGB(173, 177, 185), Enum.Material.Concrete)
+			detail("PlatformEdge", Vector3.new(0.65, 0.04, CHUNK_LENGTH), Vector3.new(side * (HALF_WIDTH + 0.5), 0.53, z), Color3.fromRGB(239, 184, 70), Enum.Material.Concrete)
+			for mark = -40, 40, 20 do
+				detail("PlatformJoint", Vector3.new(4.8, 0.015, 0.08), Vector3.new(side * (HALF_WIDTH + 2.5), 0.515, z + mark), Color3.fromRGB(93, 103, 117))
+			end
 			for step = -40, 40, 20 do
 				local height = random:NextInteger(18, 48)
-				local color = Color3.fromHSV(random:NextNumber(0.04, 0.65), 0.25, random:NextNumber(0.5, 0.8))
+				local colors = {Color3.fromRGB(110, 126, 147), Color3.fromRGB(147, 119, 105), Color3.fromRGB(103, 133, 136), Color3.fromRGB(167, 159, 143)}
+				local color = colors[random:NextInteger(1, #colors)]
 				part(model, "Building", Vector3.new(14, height, 18), Vector3.new(side * (HALF_WIDTH + 13), height / 2, z + step), color, Enum.Material.Brick)
+				detail("RoofCornice", Vector3.new(14.5, 0.5, 18.5), Vector3.new(side * (HALF_WIDTH + 13), height + 0.15, z + step), Color3.fromRGB(63, 74, 88))
+				detail("ShopAwning", Vector3.new(1.5, 0.3, 12), Vector3.new(side * (HALF_WIDTH + 5.4), 4.4, z + step), if index % 2 == 0 then Color3.fromRGB(39, 157, 164) else Color3.fromRGB(187, 99, 66))
 				for floor = 5, height - 2, 6 do
 					for offset = -5, 5, 5 do
-						local window = part(model, "Window", Vector3.new(0.12, 2.8, 2.4), Vector3.new(side * (HALF_WIDTH + 5.95), floor, z + step + offset), Color3.fromRGB(255, 220, 145), Enum.Material.Neon)
+						local lit = random:NextNumber() > 0.55
+						local window = part(model, "Window", Vector3.new(0.12, 2.8, 2.4), Vector3.new(side * (HALF_WIDTH + 5.95), floor, z + step + offset), if lit then Color3.fromRGB(247, 209, 147) else Color3.fromRGB(41, 62, 82), if lit then Enum.Material.Neon else Enum.Material.Glass)
 						window.CanCollide = false
 					end
 				end
@@ -72,6 +85,16 @@ function World.new(options)
 				part(model, "LampPost", Vector3.new(0.35, 10, 0.35), Vector3.new(side * (HALF_WIDTH + 0.5), 5, z + step), Color3.fromRGB(40, 50, 65), Enum.Material.Metal)
 				part(model, "Lamp", Vector3.new(2, 0.3, 1), Vector3.new(side * HALF_WIDTH, 10, z + step), Color3.fromRGB(255, 236, 175), Enum.Material.Neon)
 			end
+		end
+		-- Elevated station structures leave the full obstacle/roof clearance open.
+		if index % 4 == 0 then
+			for _, side in {-1, 1} do
+				detail("StationColumn", Vector3.new(0.8, 26, 0.8), Vector3.new(side * (HALF_WIDTH + 3.8), 13, z), Color3.fromRGB(45, 66, 85))
+			end
+			detail("StationGantry", Vector3.new(HALF_WIDTH * 2 + 8.4, 1.1, 1.2), Vector3.new(0, 26, z), Color3.fromRGB(45, 66, 85))
+			detail("StationLight", Vector3.new(HALF_WIDTH * 2, 0.12, 0.35), Vector3.new(0, 25.4, z), Color3.fromRGB(151, 234, 228), Enum.Material.Neon)
+			local sign = detail("StationName", Vector3.new(15, 2, 0.25), Vector3.new(0, 24.2, z + 0.7), Color3.fromRGB(25, 49, 66))
+			Style.label(sign, if index % 8 == 0 then "CENTRAL  •  01" else "DISTRITO  •  02")
 		end
 		model.Parent = world
 		chunks[index] = model
@@ -163,6 +186,7 @@ function World:addPlayer(player, lane)
 	}
 	character:SetAttribute("RunnerReady", true)
 	player:SetAttribute("RecoveringUntil", 0)
+	player:SetAttribute("BoostUntil", 0)
 	player:SetAttribute("TrackOriginX", self.origin.X)
 	player:SetAttribute("RunDistance", 0)
 	player:SetAttribute("SessionState", self.kind)
@@ -174,6 +198,14 @@ function World:removePlayer(player)
 	local runner = self.runners[player]
 	if not runner then return end
 	self.runners[player] = nil
+	self.obstacles.cancelRoute(player)
+	player:SetAttribute("BoostUntil", 0)
+	player:SetAttribute("RecoveringUntil", 0)
+	if runner.recoil then
+		runner.root.CFrame = runner.recoil.target
+		runner.root.Anchored = runner.recoil.wasAnchored
+		runner.recoil = nil
+	end
 	self.obstacles.clearRamp(runner)
 	Crouch.set(runner.crouch, false)
 	runner.velocity:Destroy()
@@ -197,9 +229,11 @@ function World:input(player, action)
 	local runner = self.runners[player]
 	if not runner or not runner.root.Parent or runner.humanoid.Health <= 0 then return end
 	local humanoid = runner.humanoid
+	if runner.recoil then return end
 	if action == "Left" then runner.lane = Motion.changeLane(runner.lane, -1)
 	elseif action == "Right" then runner.lane = Motion.changeLane(runner.lane, 1)
 	elseif action == "CrouchStart" then
+		runner.jumpUntil = nil
 		Crouch.set(runner.crouch, true)
 		if humanoid.FloorMaterial == Enum.Material.Air then
 			humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
@@ -207,24 +241,48 @@ function World:input(player, action)
 			runner.root.AssemblyLinearVelocity = Vector3.new(v.X, Motion.verticalVelocity(v.Y, true, true), v.Z)
 		end
 	elseif action == "CrouchEnd" then Crouch.set(runner.crouch, false)
-	elseif action == "Jump" and not runner.crouch.active and humanoid.FloorMaterial ~= Enum.Material.Air then
-		if runner.rampEntry then
-			self.obstacles.clearRamp(runner)
-			runner.rampJumpUntil = workspace:GetServerTimeNow() + 0.4
-		end
-		humanoid.Jump = true
+	elseif action == "Jump" then
+		Crouch.set(runner.crouch, false)
+		runner.jumpUntil = workspace:GetServerTimeNow() + Config.Crouch.JumpBuffer
 	end
 end
 
 function World:physics(dt)
 	for player, runner in self.runners do
 		if not runner.root.Parent or runner.humanoid.Health <= 0 then continue end
-		if workspace:GetServerTimeNow() < (runner.pauseUntil or 0) then
+		local now = workspace:GetServerTimeNow()
+		if runner.recoil then
+			local recoil = runner.recoil
+			local progress, bounce = CrashMotion.sample(now - recoil.started, Config.Crash.PauseDuration)
+			runner.root.CFrame = recoil.start:Lerp(recoil.target, progress)
+				+ Vector3.new(0, Config.Crash.RecoilHeight * bounce, 0)
+			runner.root.CFrame *= CFrame.Angles(math.rad(Config.Crash.RecoilTiltDegrees) * bounce, 0, 0)
+			if now >= runner.pauseUntil then
+				runner.root.CFrame = recoil.target
+				runner.root.Anchored = recoil.wasAnchored
+				runner.root.AssemblyLinearVelocity, runner.root.AssemblyAngularVelocity = Vector3.zero, Vector3.zero
+				if not recoil.wasAnchored then runner.root:SetNetworkOwner(nil) end
+				runner.previousPosition, runner.previousBodyCFrames = runner.root.Position, {}
+				runner.recoil = nil
+			end
+		end
+		if now < (runner.pauseUntil or 0) then
 			runner.velocity.PlaneVelocity = Vector2.zero
 			runner.humanoid:Move(Vector3.zero, false)
 			continue
 		end
-		local speed = Motion.speedForCoins(runner.collectedCoins, self.coinMode)
+		if Motion.jumpReady(now, runner.jumpUntil, runner.humanoid.FloorMaterial ~= Enum.Material.Air) then
+			runner.jumpUntil = nil
+			if runner.rampEntry then
+				self.obstacles.clearRamp(runner)
+				runner.rampJumpUntil = now + 0.4
+			end
+			runner.humanoid.Jump = true
+		elseif runner.jumpUntil and now > runner.jumpUntil then
+			runner.jumpUntil = nil
+		end
+		local bonus = if now < (runner.boostUntil or 0) then runner.boostBonus or Config.SpeedRoutes.Bonus else 0
+		local speed = Motion.approachSpeed(runner.speed, runner.collectedCoins, self.coinMode, dt, bonus)
 		self.obstacles.prepareRamp(runner, dt, speed)
 		runner.speed = speed
 		local duration = Motion.laneDurationForCoins(runner.collectedCoins, self.coinMode)
@@ -243,6 +301,7 @@ function World:physics(dt)
 end
 
 function World:recover(player, runner, hit)
+	self.obstacles.cancelRoute(player, true)
 	local lane, z = self.obstacles.recovery(runner, hit)
 	self.obstacles.clearRamp(runner)
 	Crouch.set(runner.crouch, false)
@@ -253,12 +312,18 @@ function World:recover(player, runner, hit)
 		clearance += if leg then leg.Size.Y else 2
 	end
 	runner.lane, runner.collectedCoins = lane, 0
+	runner.jumpUntil = nil
+	runner.boostUntil = nil
+	player:SetAttribute("BoostUntil", 0)
 	runner.velocity.PlaneVelocity = Vector2.zero
-	root.CFrame = CFrame.new(self.origin + Vector3.new(lane * Motion.LaneWidth, clearance + 0.2, z))
+	local target = CFrame.new(self.origin + Vector3.new(lane * Motion.LaneWidth, clearance + 0.2, z))
 	root.AssemblyLinearVelocity, root.AssemblyAngularVelocity = Vector3.zero, Vector3.zero
 	runner.previousPosition, runner.previousBodyCFrames = root.Position, {}
 	local now = workspace:GetServerTimeNow()
-	runner.pauseUntil, runner.protectedUntil = now + Config.Crash.PauseDuration, now + Config.Crash.ProtectionDuration
+	runner.recoil = {start = root.CFrame, target = target, started = now, wasAnchored = root.Anchored}
+	root.Anchored = true
+	runner.pauseUntil = now + Config.Crash.PauseDuration
+	runner.protectedUntil = now + math.max(Config.Crash.PauseDuration, Config.Crash.ProtectionDuration)
 	player:SetAttribute("CoinsLost", self.coins.resetPlayer(player))
 	runner.speed = Motion.speedForCoins(0, self.coinMode)
 	player:SetAttribute("RecoveringUntil", runner.protectedUntil)
@@ -274,6 +339,13 @@ function World:heartbeat(dt)
 		local hit = if protected then false else self.obstacles.check(runner)
 		if hit then self:recover(player, runner, hit)
 		elseif not protected then
+			local route = self.obstacles.collectBoost(player, runner)
+			if route then
+				runner.boostUntil = workspace:GetServerTimeNow() + route.duration
+				runner.boostBonus = route.bonus
+				player:SetAttribute("BoostUntil", runner.boostUntil)
+				player:SetAttribute("BoostBonus", runner.boostBonus)
+			end
 			runner.collectedCoins += self.coins.collect(player, runner.previousPosition, runner.root.Position)
 		end
 		runner.previousPosition = runner.root.Position

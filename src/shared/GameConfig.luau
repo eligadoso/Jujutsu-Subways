@@ -1,8 +1,17 @@
 -- Lane indices are centered on zero: -2, -1, 0, 1, 2.
 local Config = {}
 Config.Track = {LaneCount = 5, LaneWidth = 6, ChunkLength = 100}
-Config.Crouch = {HeightReduction = 0.9, FastFallSpeed = 65}
-Config.Speed = {Base = 26, PerCoin = 0.5, Max = 60}
+Config.Crouch = {HeightReduction = 0.9, FastFallSpeed = 65, JumpBuffer = 0.2}
+Config.Speed = {Base = 26, PerCoin = 0.2, Max = 42, Acceleration = 6}
+Config.SpeedRoutes = {Enabled = true, FirstChunk = 3, EveryChunks = 6, Bonus = 10, Duration = 3, Acceleration = 24}
+Config.MotionEffects = {
+	Enabled = true,
+	Intensity = 1, -- Set to 0 for a steady camera; values are capped at 1.
+	BaseFOV = 75, SpeedFOV = 10,
+	MaxRollDegrees = 2.5,
+	LandingDip = 0.3, CrashShake = 0.22,
+	JumpLift = 0.18, LaneSway = 0.35,
+}
 Config.Obstacles = {
 	Enabled = true,
 	Seed = 473,
@@ -24,7 +33,11 @@ Config.Obstacles = {
 	SignBottom = 3,
 	SignTop = 6.5,
 }
-Config.Crash = {BacktrackDistance = 55, PauseDuration = 0.5, ProtectionDuration = 1.25}
+Config.Crash = {
+	BacktrackDistance = 55, PauseDuration = 0.5, ProtectionDuration = 1.25,
+	RecoilHeight = 1.6, RecoilTiltDegrees = 12,
+	BlinkInterval = 0.1, BlinkTransparency = 0.75,
+}
 Config.Trains = {
 	Enabled = true, Speed = 38, Length = 52, Height = 11,
 	SpawnDistance = 260, MinSpawnDistance = 220, MaxSpawnDistance = 340,
@@ -60,7 +73,7 @@ Config.CoinModes = {
 		AllowedLanes = {-2, -1, 0, 1, 2},
 	},
 	CoinRush = {
-		Speed = {Base = 26, PerCoin = 0.5, Max = 70},
+		Speed = {Base = 26, PerCoin = 0.2, Max = 48, Acceleration = 6},
 		Enabled = true,
 		Seed = 9271,
 		SpawnChance = 1,

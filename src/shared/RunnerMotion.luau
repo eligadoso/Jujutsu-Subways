@@ -23,6 +23,19 @@ function Motion.laneDurationForCoins(count, modeName)
 	return math.min(settings.MaxDuration, settings.BaseDuration + math.max(0, count) * settings.SecondsPerCoin)
 end
 
+function Motion.approachSpeed(current, count, modeName, dt, bonus)
+	local mode = Config.CoinModes[modeName or Config.DefaultMode]
+	local settings = (mode and mode.Speed) or Config.Speed
+	local target = Motion.speedForCoins(count, modeName) + (bonus or 0)
+	local acceleration = if bonus and bonus > 0 then Config.SpeedRoutes.Acceleration else settings.Acceleration or Config.Speed.Acceleration
+	local step = acceleration * math.max(dt, 0)
+	return current + math.clamp(target - current, -step, step)
+end
+
+function Motion.jumpReady(now, deadline, grounded)
+	return deadline ~= nil and now <= deadline and grounded
+end
+
 function Motion.velocity(lane, x, dt, speed, laneDuration)
 	local offset = lane * Motion.LaneWidth - x
 	local lateralSpeed = if laneDuration then Motion.LaneWidth / math.max(laneDuration, 0.001) else Motion.LateralSpeed
