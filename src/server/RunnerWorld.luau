@@ -330,6 +330,7 @@ function World:physics(dt)
 		local speed = Motion.approachSpeed(runner.speed, runner.collectedCoins, self.coinMode, dt, bonus)
 		runner.speed = speed
 		local shoesActive = now < (runner.shoesUntil or 0)
+		if not shoesActive then self.abilities.finishSneakers(runner) end
 		if runner.pose.running ~= shoesActive then
 			SkatePose.setRunning(runner.pose, shoesActive)
 			-- Removing welded shoe parts can change the assembly; retain server ownership.
@@ -345,10 +346,8 @@ function World:physics(dt)
 			appliedSpeed = math.max(normalSpeed, appliedSpeed)
 		end
 		runner.wasShoes, runner.appliedSpeed = shoesTransition, appliedSpeed
-		if shoesActive then
-			runner.stride = (runner.stride or 0) + dt * appliedSpeed * 0.32
-			SkatePose.apply(runner.pose, runner.crouch.active, runner.stride)
-		end
+		runner.stride = (runner.stride or 0) + dt * appliedSpeed * 0.32
+		SkatePose.apply(runner.pose, runner.crouch.active, runner.stride, dt)
 		self.obstacles.prepareRamp(runner, dt, appliedSpeed)
 		local duration = Motion.laneDurationForCoins(runner.collectedCoins, self.coinMode)
 		local x, z = Motion.stableVelocity(runner.lane, runner.root.Position.X - self.origin.X, dt, appliedSpeed, duration)
@@ -360,6 +359,11 @@ function World:physics(dt)
 			if y ~= v.Y then runner.root.AssemblyLinearVelocity = Vector3.new(v.X, y, v.Z) end
 		end
 		-- A single velocity controller; no force actuator or position corrections compete with it.
+		-- Weld removal can reset ownership during the next physics assembly rebuild.
+		-- Keep it manual so the local WalkSpeed=0 controller cannot stop the runner.
+		if not runner.root.Anchored and (runner.root:GetNetworkOwnershipAuto() or runner.root:GetNetworkOwner() ~= nil) then
+			runner.root:SetNetworkOwner(nil)
+		end
 		local vertical = runner.root.AssemblyLinearVelocity.Y
 		runner.root.AssemblyLinearVelocity = Vector3.new(x, vertical, z)
 		runner.root.AssemblyAngularVelocity = Vector3.zero

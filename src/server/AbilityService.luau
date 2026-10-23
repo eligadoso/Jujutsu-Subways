@@ -53,7 +53,7 @@ function Service.new(world)
 		feedback:FireClient(player, kind, if kind == "Egg" then s.EggDuration else 1)
 		return true
 	end
-	local function gear(runner, kind, duration)
+	local function gear(runner, kind)
 		if runner[kind .. "Visual"] then runner[kind .. "Visual"]:Destroy() end
 		local model = Instance.new("Model", runner.root.Parent)
 		model.Name = kind .. "Effect"
@@ -73,7 +73,8 @@ function Service.new(world)
 				end
 			end
 		end
-		Debris:AddItem(model, duration)
+		-- RunnerWorld removes welded gear before restoring physics ownership.
+		-- Debris can otherwise rebuild the assembly after that ownership reset.
 		if runner.root:IsDescendantOf(workspace) then runner.root:SetNetworkOwner(nil) end
 	end
 	function self.use(player, runner, kind, direction)
@@ -81,7 +82,7 @@ function Service.new(world)
 		if kind == "Sneakers" then
 			runner.shoesUntil = now + s.SneakersDuration
 			player:SetAttribute("ShoesUntil", runner.shoesUntil)
-			gear(runner, kind, s.SneakersDuration)
+			gear(runner, kind)
 		elseif kind == "Lightning" then
 			storm:FireAllClients(workspace:GetServerTimeNow(), 2.2)
 			local function boltAt(position)
@@ -185,6 +186,16 @@ function Service.new(world)
 					o.hits[target] = true
 					if o.kind ~= "Boomerang" then o.model:Destroy(); table.remove(objects, i); break end
 				end
+			end
+		end
+	end
+	function self.finishSneakers(runner)
+		local visual = runner.SneakersVisual
+		if visual then
+			runner.SneakersVisual = nil
+			visual:Destroy()
+			if runner.root:IsDescendantOf(workspace) and not runner.root.Anchored then
+				runner.root:SetNetworkOwner(nil)
 			end
 		end
 	end

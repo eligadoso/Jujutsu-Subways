@@ -3,29 +3,36 @@ local Pose = {}
 
 local function rotation(x, y, z) return CFrame.Angles(math.rad(x), math.rad(y), math.rad(z)) end
 
-function Pose.apply(state, crouched, stride)
+function Pose.apply(state, crouched, stride, dt)
     state.crouched = crouched
+    local target = if crouched then 1 else 0
+    state.crouchBlend = (state.crouchBlend or 0) + math.clamp(target - (state.crouchBlend or 0), -6 * (dt or 0), 6 * (dt or 0))
+    local blend = state.crouchBlend
+    local function bend(standing, ducking) return standing + (ducking - standing) * blend end
     local frames = {[state.root] = CFrame.identity}
     for _, entry in state.joints do
         local joint = entry.joint
         if not joint.Parent then continue end
         local name = joint.Part1 and joint.Part1.Name or ""
         local angle = CFrame.identity
-        if name == "UpperTorso" or name == "Torso" then angle = rotation(if crouched then -30 else -6, 0, 0)
-        elseif name == "LeftUpperLeg" or name == "RightUpperLeg" then angle = rotation(if crouched then -40 else -10, 0, 0)
-        elseif name == "LeftLowerLeg" or name == "RightLowerLeg" then angle = rotation(if crouched then 80 else 16, 0, 0)
-        elseif name == "LeftFoot" or name == "RightFoot" then angle = rotation(if crouched then -40 else -6, 0, 0)
-        elseif name == "Left Leg" or name == "Right Leg" then angle = rotation(if crouched then 30 else 6, 0, 0)
-        elseif name == "LeftUpperArm" or name == "Left Arm" then angle = rotation(if crouched then -25 else -8, 0, -12)
-        elseif name == "RightUpperArm" or name == "Right Arm" then angle = rotation(if crouched then -25 else -8, 0, 12) end
-        if state.running and not crouched then
+        if name == "UpperTorso" or name == "Torso" then angle = rotation(bend(-6, -30), 0, 0)
+        elseif name == "LeftUpperLeg" or name == "RightUpperLeg" then angle = rotation(bend(-10, -40), 0, 0)
+        elseif name == "LeftLowerLeg" or name == "RightLowerLeg" then angle = rotation(bend(16, 80), 0, 0)
+        elseif name == "LeftFoot" or name == "RightFoot" then angle = rotation(bend(-6, -40), 0, 0)
+        elseif name == "Left Leg" or name == "Right Leg" then angle = rotation(bend(6, 30), 0, 0)
+        elseif name == "LeftUpperArm" or name == "Left Arm" then angle = rotation(bend(-8, -25), 0, -12)
+        elseif name == "RightUpperArm" or name == "Right Arm" then angle = rotation(bend(-8, -25), 0, 12) end
+        if state.running then
+            local crouchAngle = angle
             local swing = math.sin(stride or 0)
             local side = if string.sub(name, 1, 4) == "Left" then 1 else -1
             if string.find(name, "UpperLeg") or name == "Left Leg" or name == "Right Leg" then angle = rotation(42 * swing * side, 0, 0)
             elseif string.find(name, "LowerLeg") then angle = rotation(15 + 35 * math.max(0, -swing * side), 0, 0)
             elseif string.find(name, "UpperArm") or name == "Left Arm" or name == "Right Arm" then angle = rotation(-38 * swing * side - 12, 0, side * -8)
             elseif string.find(name, "LowerArm") then angle = rotation(-55, 0, 0)
-            elseif name == "UpperTorso" or name == "Torso" then angle = rotation(-10, 0, 0) end
+            elseif name == "UpperTorso" or name == "Torso" then angle = rotation(-10, 0, 0)
+            elseif name == "LeftFoot" or name == "RightFoot" then angle = rotation(-12 * swing * side, 0, 0) end
+            angle = angle:Lerp(crouchAngle, blend)
         end
         joint.C0 = CFrame.new(entry.original.Position) * angle * entry.original.Rotation
         joint.Transform = CFrame.identity
