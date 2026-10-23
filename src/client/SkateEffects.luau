@@ -46,7 +46,7 @@ RunService:BindToRenderStep("RunnerSkateEffects", Enum.RenderPriority.Character.
 		and not protected and humanoid.FloorMaterial ~= Enum.Material.Air and speed > 27
 	local boosted = math.max(player:GetAttribute("BoostUntil") or 0, player:GetAttribute("DraftUntil") or 0) > workspace:GetServerTimeNow()
 	for _, trail in trails do
-		trail.Enabled = enabled == true
+		trail.Enabled = enabled == true and not character:GetAttribute("SneakersRunning")
 		trail.Lifetime = 0.12 + math.clamp((speed - 27) / 20, 0, 1) * 0.18 * math.clamp(Config.MotionEffects.Intensity, 0, 1)
 		trail.LightEmission = if boosted then 1 else 0.6
 		if not enabled then trail:Clear() end

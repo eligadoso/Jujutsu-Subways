@@ -50,4 +50,14 @@ function Motion.verticalVelocity(y, crouching, airborne)
 	return y
 end
 
+function Motion.stableVelocity(lane, x, dt, speed, duration)
+	local offset = math.clamp(lane, Motion.MinLane, Motion.MaxLane) * Motion.LaneWidth - x
+	local seconds = math.max(duration or Config.LaneChange.BaseDuration, 0.1)
+	if math.abs(offset) < 0.015 then return 0, -speed end
+	local step = math.max(dt, 0.001)
+	local approach = offset * (1 - math.exp(-6 * step / seconds)) / step
+	local limit = Motion.LaneWidth / seconds
+	return math.clamp(approach, -limit, limit), -speed
+end
+
 return Motion

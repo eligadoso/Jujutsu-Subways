@@ -12,8 +12,19 @@ function Skateboard.equip(character, humanoid, root)
 	local model = Instance.new("Model")
 	model.Name = "Skateboard"
 	local origin = root.CFrame * CFrame.new(0, -footDistance - 0.12, 0)
+	local minX, maxX = 0, 0
+	for _, name in {"LeftFoot", "RightFoot", "Left Leg", "Right Leg"} do
+		local foot = character:FindFirstChild(name)
+		if foot then
+			local x = root.CFrame:PointToObjectSpace(foot.Position).X
+			minX, maxX = math.min(minX, x - foot.Size.X / 2), math.max(maxX, x + foot.Size.X / 2)
+		end
+	end
+	local widthScale = math.clamp((maxX - minX + 0.3) / 2.6, 1, 2.5)
 
 	local function piece(name, size, offset, color, material, shape)
+		size = Vector3.new(size.X * widthScale, size.Y, size.Z)
+		offset = Vector3.new(offset.X * widthScale, offset.Y, offset.Z)
 		local p = Instance.new("Part")
 		p.Name = name
 		p.Size = size

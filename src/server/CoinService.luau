@@ -3,8 +3,11 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("GameConfig"))
 local Layout = require(Shared:WaitForChild("CoinLayout"))
 local CoinModel = require(script.Parent:WaitForChild("CoinModel"))
+local PickupRules = require(Shared:WaitForChild("PickupRules"))
 local pickupFeedback = Instance.new("RemoteEvent")
 pickupFeedback.Name, pickupFeedback.Parent = "CoinPickup", ReplicatedStorage
+local visibility = Instance.new("RemoteEvent")
+visibility.Name, visibility.Parent = "PersonalCoinPickup", ReplicatedStorage
 local Module = {}
 function Module.new(context)
 	local Obstacles = context.Obstacles
@@ -24,7 +27,10 @@ function Module.new(context)
 			local height = Obstacles.coinHeight(index, data.x, data.z, data.y)
 			if not height then continue end
 			local model, core = CoinModel.create(origin + Vector3.new(data.x, height, data.z), data.value, folder)
-			table.insert(entries, {part = core, model = model, value = data.value, radius = data.radius})
+			local id = context.Parent.Name .. ":" .. context.Seed .. ":coin:" .. index .. ":" .. (#entries + 1)
+			model:SetAttribute("PickupId", id)
+			game:GetService("CollectionService"):AddTag(model, "PersonalCoinPickup")
+			table.insert(entries, {part = core, model = model, value = data.value, radius = data.radius, used = {}, id = id})
 		end
 		chunks[index] = {parent = parent, folder = folder, entries = entries}
 	end
@@ -76,17 +82,18 @@ function Module.new(context)
 	function CoinService.collect(player, previous, current)
 		local collected = 0
 		local positions, value = {}, 0
+		local hidden, now = {}, workspace:GetServerTimeNow()
 		local segment = current - previous
 		local lengthSquared = segment:Dot(segment)
 		for _, chunk in chunks do
 			for i = #chunk.entries, 1, -1 do
 				local entry = chunk.entries[i]
 				local position = entry.part.Position
+				if not PickupRules.available(entry.used[player.UserId], now, false, (previous-position).Magnitude > entry.radius) then continue end
 				local t = if lengthSquared > 0 then math.clamp((position - previous):Dot(segment) / lengthSquared, 0, 1) else 0
 				if (position - (previous + segment * t)).Magnitude <= entry.radius then
-					-- Remove first so a shared coin can only be awarded once.
-					table.remove(chunk.entries, i)
-					entry.model:Destroy()
+					entry.used[player.UserId] = now + Config.CoinRespawnTime
+					table.insert(hidden, entry.id)
 					if #positions < 12 then table.insert(positions, position) end
 					value += entry.value
 					local coins = player.leaderstats.Coins
@@ -96,7 +103,10 @@ function Module.new(context)
 				end
 			end
 		end
-		if collected > 0 then pickupFeedback:FireClient(player, positions, value) end
+		if collected > 0 then
+			pickupFeedback:FireClient(player, positions, value)
+			visibility:FireClient(player, hidden, now + Config.CoinRespawnTime)
+		end
 		return collected
 	end
 

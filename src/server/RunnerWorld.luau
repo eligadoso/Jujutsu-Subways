@@ -5,8 +5,11 @@ local CrashMotion = require(Shared:WaitForChild("CrashMotion"))
 local Drafting = require(Shared:WaitForChild("Drafting"))
 local Skateboard = require(script.Parent:WaitForChild("Skateboard"))
 local Crouch = require(script.Parent:WaitForChild("Crouch"))
+local SkatePose = require(script.Parent:WaitForChild("SkatePose"))
 local CoinFactory = require(script.Parent:WaitForChild("CoinService"))
 local PowerUpFactory = require(script.Parent:WaitForChild("PowerUpService"))
+local AbilityFactory = require(script.Parent:WaitForChild("AbilityService"))
+local AbilityRules = require(Shared:WaitForChild("AbilityRules"))
 local ObstacleFactory = require(script.Parent:WaitForChild("ObstacleService"))
 local TrainFactory = require(script.Parent:WaitForChild("TrainService"))
 local Style = require(script.Parent:WaitForChild("VisualStyle"))
@@ -34,6 +37,8 @@ function World.new(options)
 	self.obstacles, self.coins, self.trains = Obstacles, Coins, Trains
 	self.coinMode = activeMode
 	self.powerUps = PowerUps
+	self.abilities = AbilityFactory.new(self)
+	context.UseAbility = self.abilities.use
 
 	local function part(parent, name, size, position, color, material)
 		local p = Instance.new("Part")
@@ -55,6 +60,11 @@ function World.new(options)
 			return Style.detail(model, name, size, CFrame.new(position + origin), color, material)
 		end
 		part(model, "TrackBed", Vector3.new(HALF_WIDTH * 2, 2, CHUNK_LENGTH), Vector3.new(0, -1, z), Color3.fromRGB(48, 56, 66), Enum.Material.Asphalt)
+		-- Continuous physical edge guards prevent lateral impulses from pushing runners off-track.
+		for _, side in {-1, 1} do
+			local wall = part(model, "TrackBoundary", Vector3.new(1, 100, CHUNK_LENGTH + 2), Vector3.new(side * (Config.Track.LaneCount * Config.Track.LaneWidth / 2 + 0.5), 40, z), Color3.new(0, 0, 0))
+			wall.Transparency, wall.CanTouch, wall.CastShadow = 1, false, false
+		end
 		for lane = Motion.MinLane, Motion.MaxLane do
 			local x = lane * Motion.LaneWidth
 			for _, offset in {-1.9, 1.9} do
@@ -178,29 +188,22 @@ function World:addPlayer(player, lane)
 	player:SetAttribute("DraftUntil", 0)
 	local originalHeight = humanoid.HipHeight
 	local speed = Motion.speedForCoins(0, self.coinMode)
-	humanoid.WalkSpeed, humanoid.AutoRotate = speed, false
+	humanoid.WalkSpeed, humanoid.AutoRotate = 0, false
 	humanoid.UseJumpPower, humanoid.JumpPower = true, 50
 	root.CFrame = CFrame.new(self.origin + Vector3.new(lane * Motion.LaneWidth, 5, 25))
 	root.AssemblyLinearVelocity, root.AssemblyAngularVelocity = Vector3.zero, Vector3.zero
 	Skateboard.equip(character, humanoid, root)
+	local pose = SkatePose.start(character, humanoid)
 	root:SetNetworkOwner(nil)
 	local attachment = Instance.new("Attachment", root)
 	attachment.Name = "RunnerAttachment"
-	local velocity = Instance.new("LinearVelocity")
-	velocity.Name, velocity.Attachment0 = "RunnerVelocity", attachment
-	velocity.RelativeTo = Enum.ActuatorRelativeTo.World
-	velocity.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
-	velocity.PrimaryTangentAxis, velocity.SecondaryTangentAxis = Vector3.new(1, 0, 0), Vector3.new(0, 0, 1)
-	velocity.ForceLimitsEnabled = false
-	velocity.PlaneVelocity = Vector2.new(0, -speed)
-	velocity.Parent = root
 	local facing = Instance.new("AlignOrientation")
 	facing.Name, facing.Mode = "RunnerFacing", Enum.OrientationAlignmentMode.OneAttachment
 	facing.Attachment0, facing.CFrame, facing.RigidityEnabled = attachment, CFrame.identity, true
 	facing.Parent = root
 	self.runners[player] = {
-		root = root, humanoid = humanoid, velocity = velocity, lane = lane,
-		previousPosition = root.Position, crouch = Crouch.create(character, humanoid),
+		root = root, humanoid = humanoid, lane = lane,
+		previousPosition = root.Position, crouch = Crouch.create(character, humanoid, pose), pose = pose,
 		collectedCoins = 0, speed = speed, originalHeight = originalHeight, attachment = attachment, facing = facing,
 	}
 	character:SetAttribute("RunnerReady", true)
@@ -217,6 +220,8 @@ function World:removePlayer(player)
 	local runner = self.runners[player]
 	if not runner then return end
 	self.runners[player] = nil
+	self.abilities.clear(runner)
+	for _, attribute in {"EggUntil", "ShoesUntil", "StunUntil", "SlowUntil"} do player:SetAttribute(attribute, 0) end
 	player:SetAttribute("DraftCharge", 0)
 	player:SetAttribute("DraftUntil", 0)
 	player:SetAttribute("HeldPowerUp", "")
@@ -230,7 +235,7 @@ function World:removePlayer(player)
 	end
 	self.obstacles.clearRamp(runner)
 	Crouch.set(runner.crouch, false)
-	runner.velocity:Destroy()
+	SkatePose.stop(runner.pose)
 	runner.facing:Destroy()
 	runner.attachment:Destroy()
 	local character = runner.root.Parent
@@ -252,7 +257,8 @@ function World:input(player, action)
 	if not runner or not runner.root.Parent or runner.humanoid.Health <= 0 then return end
 	local humanoid = runner.humanoid
 	if runner.recoil then return end
-	if action == "UsePowerUp" then self.powerUps.use(player, runner)
+	if workspace:GetServerTimeNow() < (runner.stunUntil or 0) then return end
+	if action == "UsePowerUp" or action == "UsePowerUpBack" then self.powerUps.use(player, runner, if action == "UsePowerUpBack" then 1 else -1)
 	elseif action == "Left" then runner.lane = Motion.changeLane(runner.lane, -1)
 	elseif action == "Right" then runner.lane = Motion.changeLane(runner.lane, 1)
 	elseif action == "CrouchStart" then
@@ -290,7 +296,8 @@ function World:physics(dt)
 			end
 		end
 		if now < (runner.pauseUntil or 0) then
-			runner.velocity.PlaneVelocity = Vector2.zero
+			local vertical = runner.root.AssemblyLinearVelocity.Y
+			runner.root.AssemblyLinearVelocity = Vector3.new(0, vertical, 0)
 			runner.humanoid:Move(Vector3.zero, false)
 			continue
 		end
@@ -321,24 +328,48 @@ function World:physics(dt)
 		player:SetAttribute("DraftCharge", runner.draftCharge / Config.Drafting.ChargeTime)
 		if now < (runner.draftUntil or 0) then bonus = math.max(bonus, Config.Drafting.Bonus) end
 		local speed = Motion.approachSpeed(runner.speed, runner.collectedCoins, self.coinMode, dt, bonus)
-		self.obstacles.prepareRamp(runner, dt, speed)
 		runner.speed = speed
+		local shoesActive = now < (runner.shoesUntil or 0)
+		if runner.pose.running ~= shoesActive then
+			SkatePose.setRunning(runner.pose, shoesActive)
+			-- Removing welded shoe parts can change the assembly; retain server ownership.
+			runner.root:SetNetworkOwner(nil)
+		end
+		local normalSpeed = AbilityRules.speed(speed, now, runner.stunUntil, runner.slowUntil, 0, Config.Abilities.SlowMultiplier)
+		local appliedSpeed = normalSpeed * (if shoesActive then 2 else 1)
+		local shoesTransition = shoesActive or (runner.wasShoes and math.abs((runner.appliedSpeed or speed) - appliedSpeed) > 0.1)
+		if shoesTransition and now >= (runner.stunUntil or 0) then
+			appliedSpeed = AbilityRules.controlledSpeed(runner.appliedSpeed or speed, appliedSpeed, dt,
+				Config.Abilities.SneakersMaxSpeed, Config.Abilities.SneakersAcceleration, Config.Abilities.SneakersBraking)
+			-- The normal running speed is the floor, never zero on item expiry.
+			appliedSpeed = math.max(normalSpeed, appliedSpeed)
+		end
+		runner.wasShoes, runner.appliedSpeed = shoesTransition, appliedSpeed
+		if shoesActive then
+			runner.stride = (runner.stride or 0) + dt * appliedSpeed * 0.32
+			SkatePose.apply(runner.pose, runner.crouch.active, runner.stride)
+		end
+		self.obstacles.prepareRamp(runner, dt, appliedSpeed)
 		local duration = Motion.laneDurationForCoins(runner.collectedCoins, self.coinMode)
-		local x, z = Motion.velocity(runner.lane, runner.root.Position.X - self.origin.X, dt, speed, duration)
+		local x, z = Motion.stableVelocity(runner.lane, runner.root.Position.X - self.origin.X, dt, appliedSpeed, duration)
+		if now < (runner.stunUntil or 0) then x, z = 0, 0; runner.humanoid.Jump = false end
 		if runner.crouch.active then
 			runner.humanoid.Jump = false
 			local v = runner.root.AssemblyLinearVelocity
 			local y = Motion.verticalVelocity(v.Y, true, runner.humanoid.FloorMaterial == Enum.Material.Air)
 			if y ~= v.Y then runner.root.AssemblyLinearVelocity = Vector3.new(v.X, y, v.Z) end
 		end
-		runner.velocity.PlaneVelocity = Vector2.new(x, z)
-		local direction = Vector3.new(x, 0, z)
-		runner.humanoid.WalkSpeed = direction.Magnitude
-		runner.humanoid:Move(direction.Unit, false)
+		-- A single velocity controller; no force actuator or position corrections compete with it.
+		local vertical = runner.root.AssemblyLinearVelocity.Y
+		runner.root.AssemblyLinearVelocity = Vector3.new(x, vertical, z)
+		runner.root.AssemblyAngularVelocity = Vector3.zero
+		runner.humanoid.WalkSpeed = 0
+		runner.humanoid:Move(Vector3.zero, false)
 	end
 end
 
 function World:recover(player, runner, hit)
+	runner.appliedSpeed, runner.wasShoes = nil, false
 	runner.draftCharge, runner.draftUntil = 0, 0
 	player:SetAttribute("DraftCharge", 0)
 	player:SetAttribute("DraftUntil", 0)
@@ -356,7 +387,6 @@ function World:recover(player, runner, hit)
 	runner.jumpUntil = nil
 	runner.boostUntil = nil
 	player:SetAttribute("BoostUntil", 0)
-	runner.velocity.PlaneVelocity = Vector2.zero
 	local target = CFrame.new(self.origin + Vector3.new(lane * Motion.LaneWidth, clearance + 0.2, z))
 	root.AssemblyLinearVelocity, root.AssemblyAngularVelocity = Vector3.zero, Vector3.zero
 	runner.previousPosition, runner.previousBodyCFrames = root.Position, {}
@@ -373,6 +403,7 @@ function World:recover(player, runner, hit)
 end
 
 function World:heartbeat(dt)
+	self.abilities.update(dt)
 	self.trains.update(dt, self.runners, self.obstacles.staticEntries())
 	for player, runner in self.runners do
 		if not runner.root.Parent or runner.humanoid.Health <= 0 then continue end

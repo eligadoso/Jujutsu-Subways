@@ -54,7 +54,7 @@ local function leaveSession(player, result, finished)
 		if world.kind == "Solo" then destroyWorld(world) end
 	end
 	player:SetAttribute("SessionState", "Lobby")
-	player:SetAttribute("RunDistance", if finished then rules.mode.Distance else 0)
+	player:SetAttribute("RunDistance", if finished then (rules.entries[player.UserId] and rules.entries[player.UserId].progress or 0) else 0)
 	if result then player:SetAttribute("MatchResult", result) end
 	Lobby.place(player)
 	Spectators.stop(player)
@@ -96,9 +96,9 @@ local function startRace()
 		rules.deadline = workspace:GetServerTimeNow() + Config.Matches.Intermission
 		return
 	end
-	local modeName = Config.Matches.DefaultMode
+	local modeName = if #candidates >= 2 and rules.roundId % 2 == 1 then "Elimination" else Config.Matches.DefaultMode
 	local mode = Config.Matches.Modes[modeName]
-	raceWorld = newWorld("Race_" .. (rules.roundId + 1), "Race", 0, mode.CoinMode, mode.Distance)
+	raceWorld = newWorld("Race_" .. (rules.roundId + 1), "Race", 0, mode.CoinMode, if mode.CaptureInterval then nil else mode.Distance)
 	local ids, participants = {}, {}
 	for i, player in candidates do
 		Spectators.stop(player)
@@ -227,9 +227,20 @@ local function updateRace(now)
 			continue
 		end
 		local progress = math.max(0, 25 - runner.root.Position.Z)
-		local time = Rules.crossingTime(entry.progress, progress, entry.checked, now, rules.mode.Distance)
+		local time = if rules.mode.CaptureInterval then nil else Rules.crossingTime(entry.progress, progress, entry.checked, now, rules.mode.Distance)
 		entry.progress, entry.checked = progress, now
 		if time then table.insert(finished, {player = player, time = time}) end
+	end
+	if rules.mode.CaptureInterval then
+		local result = rules:capture(now)
+		if result and result.captured then
+			local player = Players:GetPlayerByUserId(result.captured)
+			if player then leaveSession(player, "¡Te atraparon!", true) end
+		end
+		if result and result.winner then
+			local player = Players:GetPlayerByUserId(result.winner)
+			if player then leaveSession(player, "¡Ultimo superviviente!", true) end
+		end
 	end
 	table.sort(finished, function(a, b)
 		if a.time ~= b.time then return a.time < b.time end
@@ -249,9 +260,12 @@ end
 
 local function publish()
 	workspace:SetAttribute("MatchState", rules.state)
+	workspace:SetAttribute("MatchMode", rules.modeName or "Race")
+	workspace:SetAttribute("CaptureDeadline", rules.nextCapture or 0)
 	workspace:SetAttribute("MatchDeadline", rules.deadline)
+	workspace:SetAttribute("MatchDuration", if rules.state == "Race" and rules.started then rules.deadline - rules.started else Config.Matches.Intermission)
 	workspace:SetAttribute("MatchName", if rules.mode then rules.mode.DisplayName else Config.Matches.Modes[Config.Matches.DefaultMode].DisplayName)
-	workspace:SetAttribute("MatchDistance", Config.Matches.Modes[Config.Matches.DefaultMode].Distance)
+	workspace:SetAttribute("MatchDistance", if rules.mode then rules.mode.Distance else Config.Matches.Modes[Config.Matches.DefaultMode].Distance)
 	workspace:SetAttribute("AvailablePlayers", #eligiblePlayers())
 	local standings = rules:standings()
 	local total = #standings

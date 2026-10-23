@@ -16,11 +16,15 @@ require(script:WaitForChild("CameraController"))
 require(script:WaitForChild("InvulnerabilityEffects"))
 require(script:WaitForChild("WindEffects"))
 require(script:WaitForChild("SkateEffects"))
+require(script:WaitForChild("SkateAnimationGuard"))
 require(script:WaitForChild("RouteEffects"))
 require(script:WaitForChild("CoinEffects"))
 require(script:WaitForChild("PowerUpHUD"))
 require(script:WaitForChild("PersonalPickups"))
 require(script:WaitForChild("DraftHUD"))
+require(script:WaitForChild("AbilityEffects"))
+require(script:WaitForChild("ProjectileWarnings"))
+require(script:WaitForChild("StormEffects"))
 local Presentation = require(ReplicatedStorage.Shared:WaitForChild("PlayerPresentation"))
 local root, humanoid, controls
 local lastRunning, lastWatching
@@ -106,28 +110,19 @@ local function button(parent, title, size, position, color)
 	item.MouseButton1Up:Connect(function() animate(1, 0.35) end)
 	return item
 end
-local status = panel("MatchStatus", UDim2.new(0.48, 0, 0, 72), UDim2.new(0.5, 0, 0, 12), Vector2.new(0.5, 0))
-local statusSize = Instance.new("UISizeConstraint", status)
-statusSize.MaxSize, statusSize.MinSize = Vector2.new(440, 72), Vector2.new(270, 72)
-local heading = label(status, UDim2.new(1, -112, 0, 28), UDim2.fromOffset(16, 7), 19)
-heading.Font = Enum.Font.FredokaOne
-heading.TextColor3 = Brand.Gold
-heading.TextScaled, heading.TextWrapped = true, false
-local headingSize = Instance.new("UITextSizeConstraint", heading)
-headingSize.MaxTextSize, headingSize.MinTextSize = 19, 12
-local raceClock = label(status, UDim2.fromOffset(85, 30), UDim2.new(1, -97, 0, 6), 27, Enum.TextXAlignment.Right)
+local raceClock = label(gui, UDim2.fromOffset(150, 42), UDim2.new(0.5, 0, 0, 6), 32, Enum.TextXAlignment.Center)
+raceClock.AnchorPoint = Vector2.new(0.5, 0)
 raceClock.Font, raceClock.TextColor3 = Enum.Font.FredokaOne, Brand.Cyan
-local subtitle = label(status, UDim2.new(1, -32, 0, 20), UDim2.fromOffset(16, 37), 12)
-subtitle.TextColor3 = muted
-local progressTrack = Instance.new("Frame", status)
+raceClock.TextStrokeColor3, raceClock.TextStrokeTransparency = Brand.Ink, 0.2
+local raceBarGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+raceBarGui.Name, raceBarGui.ResetOnSpawn, raceBarGui.IgnoreGuiInset = "RaceTimeBar", false, true
+raceBarGui.DisplayOrder = 2
+local progressTrack = Instance.new("Frame", raceBarGui)
 progressTrack.Name, progressTrack.BorderSizePixel = "RaceTrack", 0
-progressTrack.Size, progressTrack.Position = UDim2.new(1, -32, 0, 5), UDim2.new(0, 16, 1, -10)
-progressTrack.BackgroundColor3 = Color3.fromRGB(64, 51, 84)
-round(progressTrack, 3)
+progressTrack.Size, progressTrack.Position = UDim2.new(1, 0, 0, 5), UDim2.fromOffset(0, 0)
+progressTrack.BackgroundColor3 = Color3.fromRGB(45, 31, 66)
 local progress = Instance.new("Frame", progressTrack)
-progress.Size, progress.Position = UDim2.new(0, 0, 1, 0), UDim2.fromOffset(0, 0)
-round(progress, 3)
-progress.BorderSizePixel, progress.BackgroundColor3 = 0, mint
+progress.Size, progress.BorderSizePixel, progress.BackgroundColor3 = UDim2.fromScale(0, 1), 0, mint
 gradient(progress, Brand.Purple, Brand.Cyan)
 local wallet = panel("Wallet", UDim2.fromOffset(166, 68), UDim2.new(0, 16, 1, -16), Vector2.new(0, 1))
 wallet.BackgroundColor3 = Color3.fromRGB(53, 33, 49)
@@ -187,9 +182,6 @@ stop.Activated:Connect(function() sessionAction:FireServer("StopSpectate") end)
 local toast = panel("Notification", UDim2.new(0.45, 0, 0, 38), UDim2.new(0.5, 0, 0, 96), Vector2.new(0.5, 0))
 Instance.new("UISizeConstraint", toast).MaxSize = Vector2.new(420, 38)
 local toastText = label(toast, UDim2.new(1, -16, 1, -6), UDim2.fromOffset(8, 3), 13, Enum.TextXAlignment.Center)
-local protection = Instance.new("Frame", toast)
-protection.Name, protection.BorderSizePixel, protection.BackgroundColor3 = "Protection", 0, Brand.Cyan
-protection.Position = UDim2.new(0, 0, 1, -3)
 player:GetAttributeChangedSignal("MatchResult"):Connect(function()
 	resultUntil = workspace:GetServerTimeNow() + 7
 end)
@@ -348,14 +340,12 @@ RunService:BindToRenderStep("RunnerHUDRender", Enum.RenderPriority.Camera.Value 
 	local state = player:GetAttribute("SessionState") or "Lobby"
 	local active, watch = running(), watching()
 	local phase = workspace:GetAttribute("MatchState")
+	local elimination = workspace:GetAttribute("MatchMode") == "Elimination" and phase == "Race"
 	local remaining = (workspace:GetAttribute("MatchDeadline") or now) - now
-	local distance = workspace:GetAttribute("MatchDistance") or 3600
-	local travelled = player:GetAttribute("RunDistance") or 0
-	local stillRunning = workspace:GetAttribute("MatchRemaining") or 0
 	local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize
-	local compactHUD = viewport and viewport.X < 600
-	status.Size = UDim2.new(if compactHUD then 0.88 else 0.48, 0, 0, 72)
-	board.Position = UDim2.new(1, -16, 0, if compactHUD then 194 else 96)
+
+	board.Position = UDim2.new(1, -16, 0, 10)
+	raceClock.Position = UDim2.new(0.5, 0, 0, if viewport and viewport.X < 600 then 48 else 6)
 	local smallScale = if viewport and viewport.X < 400 then 0.88 else 1
 	walletScale.Scale, optionsScale.Scale = smallScale, smallScale
 	spectator.Position = UDim2.new(0.5, 0, 1, if viewport and viewport.X < 760 then -178 else -24)
@@ -366,37 +356,20 @@ RunService:BindToRenderStep("RunnerHUDRender", Enum.RenderPriority.Camera.Value 
 	afk.BackgroundColor3 = if player:GetAttribute("AFK") then Color3.fromRGB(111, 65, 148) else Brand.Panel
 	spectate.Text = if watch then "DEJAR DE ESPECTAR" else "ESPECTAR"
 	spectator.Visible = watch
-	progress.Visible = state == "Race"
-	progressTrack.Visible = state == "Race"
-	raceClock.Visible = state ~= "Solo"
-	raceClock.Text = clock(remaining)
-	progress.Size = UDim2.new(math.clamp(travelled / distance, 0, 1), 0, 1, 0)
-	if state == "Race" then
-		heading.Text = "CARRERA"
-		subtitle.Text = string.format("Puesto %d/%d   |   %d / %d studs", player:GetAttribute("RacePlace") or 0, player:GetAttribute("RacePlayers") or 1, travelled, distance)
-	elseif state == "Solo" then
-		heading.Text, subtitle.Text = "PRACTICA", tostring(travelled) .. " studs"
-	elseif state == "Finished" and phase == "Race" then
-		heading.Text = "¡EN META!"
-		subtitle.Text = string.format("Puesto %d  |  Quedan %d corredores", player:GetAttribute("RacePlace") or 0, stillRunning)
-	elseif phase == "Race" then
-		heading.Text, subtitle.Text = "EN PISTA", tostring(stillRunning) .. " corredores siguen en pista"
-	else
-		heading.Text = "SIGUIENTE CARRERA"
-		subtitle.Text = string.format("%d disponibles  |  %d studs", workspace:GetAttribute("AvailablePlayers") or 0, distance)
-	end
-	local recovering = active and now < (player:GetAttribute("RecoveringUntil") or 0)
-	protection.Visible = recovering
-	protection.Size = UDim2.new(math.clamp(((player:GetAttribute("RecoveringUntil") or 0) - now) / math.max(0.01, Config.Crash.ProtectionDuration), 0, 1), 0, 0, 3)
-	heading.TextColor3 = if state == "Race" and remaining <= 10 then Color3.fromRGB(255, 123, 102) else Brand.Gold
+    progressTrack.Visible = phase == "Race" and state ~= "Solo"
+    raceClock.Visible = state ~= "Solo"
+    local timer = if elimination then (workspace:GetAttribute("CaptureDeadline") or now) - now else remaining
+    raceClock.Text = clock(timer)
+    raceClock.TextColor3 = if timer <= 10 then Color3.fromRGB(255, 139, 110) else Brand.Cyan
+    local duration = if elimination then 20 else workspace:GetAttribute("MatchDuration") or 180
+    progress.Size = UDim2.fromScale(math.clamp(1 - math.max(0, timer) / math.max(1, duration), 0, 1), 1)
 	local result = player:GetAttribute("MatchResult") or ""
 	local showResult = now < resultUntil and result ~= ""
 	local boostTime = (player:GetAttribute("BoostUntil") or 0) - now
 	local boosted = active and boostTime > 0
-	toast.Visible = recovering or showResult or boosted
-	toast.BackgroundColor3 = if recovering then Color3.fromRGB(132, 56, 39) elseif boosted then Color3.fromRGB(35, 57, 88) else background
-	toastText.Text = if recovering then string.format("CHOQUE  -%d monedas", player:GetAttribute("CoinsLost") or 0)
-		elseif showResult then result else string.format("IMPULSO  +%d  |  %.1f s", player:GetAttribute("BoostBonus") or Config.SpeedRoutes.Bonus, math.max(0, boostTime))
+	toast.Visible = showResult or boosted
+	toast.BackgroundColor3 = if boosted then Color3.fromRGB(35, 57, 88) else background
+	toastText.Text = if showResult then result else string.format("IMPULSO  +%d  |  %.1f s", player:GetAttribute("BoostBonus") or Config.SpeedRoutes.Bonus, math.max(0, boostTime))
 	if watch then
 		local targetId = player:GetAttribute("SpectateTarget") or 0
 		local followed = if targetId ~= 0 then Players:GetPlayerByUserId(targetId) else nil

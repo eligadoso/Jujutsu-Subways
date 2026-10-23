@@ -9,13 +9,22 @@ Config.SpeedRoutes = {
 }
 Config.Drafting = {Enabled = true, MinDistance = 4, MaxDistance = 28, LateralRange = 2.5, ChargeTime = 1.4, Bonus = 6, Duration = 2, Cooldown = 3}
 Config.PowerUps = {
-	Enabled = true, FirstChunk = 2, EveryChunks = 2, PickupRadius = 2.7,
-	-- Temporary catalog: replace these entries when the actual abilities are defined.
+	Enabled = true, FirstChunk = 2, EveryChunks = 2, PickupRadius = 2.7, RespawnTime = 8,
 	Catalog = {
-		{Id = "PlaceholderA", Name = "Poder A"},
-		{Id = "PlaceholderB", Name = "Poder B"},
-		{Id = "PlaceholderC", Name = "Poder C"},
+		{Id = "Boomerang", Name = "Bumeran"},
+		{Id = "Lightning", Name = "Rayo"},
+		{Id = "MouseTrap", Name = "Trampa"},
+		{Id = "Sneakers", Name = "Zapatillas"},
+		{Id = "Egg", Name = "Huevo"},
 	},
+}
+Config.CoinRespawnTime = 6
+Config.Abilities = {
+	SneakersDuration = 4, SneakersMaxSpeed = 80, SneakersAcceleration = 28, SneakersBraking = 40, StunDuration = 1,
+	LightningLoss = 0.3, BoomerangLoss = 0.15, HitProtection = 1.5,
+	SlowDuration = 2.5, SlowMultiplier = 0.6, BaitCoins = 3,
+	EggDuration = 1.5, EggSpeed = 110, EggLifetime = 2,
+	TrapLifetime = 12, MaxObjects = 32,
 }
 Config.MotionEffects = {
 	Enabled = true,
@@ -69,6 +78,7 @@ Config.Matches = {
 	DefaultMode = "Race",
 	Modes = {
 		Race = {DisplayName = "Carrera", Duration = 180, Distance = 3600, CoinMode = "Classic"},
+		Elimination = {DisplayName = "Corre que te atrapan", Duration = 300, Distance = 1000000, CoinMode = "Classic", CaptureInterval = 20},
 	},
 }
 Config.CoinModes = {
